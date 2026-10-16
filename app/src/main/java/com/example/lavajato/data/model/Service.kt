@@ -35,8 +35,8 @@ object ServiceRepository {
             icon = Icons.Default.LocalCarWash
         ),
         Service(
-            id = "completa",
-            name = "Completa",
+            id = "limpeza_geral",
+            name = "Limpeza Geral",
             description = "Lavagem + higienização interna e pretinho nos pneus.",
             price = "R$ 120,00",
             icon = Icons.Default.AutoAwesome

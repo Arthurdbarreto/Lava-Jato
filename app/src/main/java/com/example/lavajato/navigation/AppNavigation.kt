@@ -1,84 +1,117 @@
 package com.example.lavajato.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.lavajato.ui.screens.AgendamentoScreen
+import com.example.lavajato.ui.screens.AvaliacoesScreen
 import com.example.lavajato.ui.screens.CadastroScreen
 import com.example.lavajato.ui.screens.HomeScreen
 import com.example.lavajato.ui.screens.LoginScreen
 import com.example.lavajato.ui.screens.MeusAgendamentosScreen
+import com.example.lavajato.ui.screens.PerfilScreen
 
-/**
- * Rotas do aplicativo Lava Jato.
- */
-object Routes {
+object AppRoutes {
     const val LOGIN = "login"
     const val CADASTRO = "cadastro"
     const val HOME = "home"
     const val AGENDAMENTO = "agendamento"
-    const val AGENDAMENTOS = "agendamentos"
+    const val MEUS_AGENDAMENTOS = "meus_agendamentos"
+    const val AVALIACOES = "avaliacoes"
+    const val PERFIL = "perfil"
 }
 
 @Composable
-fun AppNavigation(navController: NavHostController = rememberNavController()) {
-    NavHost(navController = navController, startDestination = Routes.LOGIN) {
+fun AppNavigation() {
+    val navController = rememberNavController()
 
-        composable(Routes.LOGIN) {
+    NavHost(
+        navController = navController,
+        startDestination = AppRoutes.LOGIN
+    ) {
+        composable(AppRoutes.LOGIN) {
             LoginScreen(
                 onEntrarClick = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
                     }
                 },
                 onCadastreSeClick = {
-                    navController.navigate(Routes.CADASTRO)
+                    navController.navigate(AppRoutes.CADASTRO)
                 }
             )
         }
 
-        composable(Routes.CADASTRO) {
+        composable(AppRoutes.CADASTRO) {
             CadastroScreen(
-                onVoltarClick = { navController.popBackStack() },
-                onEntrarClick = {
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.CADASTRO) { inclusive = true }
+                onCadastrarClick = {
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
                     }
                 },
-                onCadastrarClick = {
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.CADASTRO) { inclusive = true }
-                    }
+                onJaTenhoContaClick = {
+                    navController.popBackStack()
                 }
             )
         }
 
-        composable(Routes.HOME) {
+        composable(AppRoutes.HOME) {
             HomeScreen(
-                onAgendarServicoClick = { navController.navigate(Routes.AGENDAMENTO) },
-                onMeusAgendamentosClick = { navController.navigate(Routes.AGENDAMENTOS) }
+                onAgendarServicoClick = {
+                    navController.navigate(AppRoutes.AGENDAMENTO)
+                },
+                onMeusAgendamentosClick = {
+                    navController.navigate(AppRoutes.MEUS_AGENDAMENTOS)
+                },
+                onAvaliacoesClick = {
+                    navController.navigate(AppRoutes.AVALIACOES)
+                },
+                onPerfilClick = {
+                    navController.navigate(AppRoutes.PERFIL)
+                }
             )
         }
 
-        composable(Routes.AGENDAMENTO) {
+        composable(AppRoutes.AGENDAMENTO) {
             AgendamentoScreen(
                 onVoltarClick = { navController.popBackStack() },
-                onProximoClick = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.HOME)
+                onConcluidoClick = {
+                    navController.navigate(AppRoutes.MEUS_AGENDAMENTOS) {
+                        popUpTo(AppRoutes.HOME)
                     }
                 }
             )
         }
 
-        composable(Routes.AGENDAMENTOS) {
+        composable(AppRoutes.MEUS_AGENDAMENTOS) {
             MeusAgendamentosScreen(
                 onVoltarClick = { navController.popBackStack() },
                 onInicioClick = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.HOME)
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.HOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(AppRoutes.AVALIACOES) {
+            AvaliacoesScreen(onVoltarClick = { navController.popBackStack() })
+        }
+
+        composable(AppRoutes.PERFIL) {
+            PerfilScreen(
+                onInicioClick = {
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.HOME) { inclusive = true }
+                    }
+                },
+                onAgendamentosClick = {
+                    navController.navigate(AppRoutes.MEUS_AGENDAMENTOS)
+                },
+                onSairClick = {
+                    navController.navigate(AppRoutes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )

@@ -4,6 +4,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+
+// Declaramos a cor ANTES de usar no color scheme
+private val RedError = Color(0xFFB00020)
 
 private val LavaJatoColorScheme = lightColorScheme(
     primary = NavyDark,
@@ -14,11 +18,8 @@ private val LavaJatoColorScheme = lightColorScheme(
     onBackground = Black,
     surface = White,
     onSurface = Black,
-    error = Color0xFFB00020
+    error = RedError
 )
-
-// pequeno helper para manter o arquivo simples
-private val Color0xFFB00020 = androidx.compose.ui.graphics.Color(0xFFB00020)
 
 @Composable
 fun LavaJatoTheme(

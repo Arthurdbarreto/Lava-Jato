@@ -4,9 +4,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Corpo principal -->
     <path
         android:fillColor="#FFC61A"
         android:pathData="M28,60 L34,44 C35,41 38,39 41,39 L67,39 C70,39 73,41 74,44 L80,60 L80,74 C80,76 78,78 76,78 L74,78 C72,78 70,76 70,74 L70,70 L38,70 L38,74 C38,76 36,78 34,78 L32,78 C30,78 28,76 28,74 Z" />
-    <circle android:cx="38" android:cy="66" r="4" android:fillColor="#0B1E3D" />
-    <circle android:cx="70" android:cy="66" r="4" android:fillColor="#0B1E3D" />
+
+    <!-- Círculo esquerdo (cx=38, cy=66, r=4) -->
+    <path
+        android:fillColor="#0B1E3D"
+        android:pathData="M38,62 A4,4 0 1,1 37.99,62 Z" />
+
+    <!-- Círculo direito (cx=70, cy=66, r=4) -->
+    <path
+        android:fillColor="#0B1E3D"
+        android:pathData="M70,62 A4,4 0 1,1 69.99,62 Z" />
+
 </vector>

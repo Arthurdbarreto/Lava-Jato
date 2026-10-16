@@ -11,15 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,8 +29,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.lavajato.data.model.UserRepository
 import com.example.lavajato.ui.components.AppButton
 import com.example.lavajato.ui.components.AppOutlinedButton
 import com.example.lavajato.ui.components.AppTextField
@@ -42,17 +41,13 @@ import com.example.lavajato.ui.theme.NavyDark
 import com.example.lavajato.ui.theme.NavyDarker
 import com.example.lavajato.ui.theme.YellowAccent
 
-/**
- * Tela 1 - Login
- * Fundo escuro com imagem de fundo estilizada (gradiente, já que não há
- * imagens externas disponíveis), logo, campos e ações principais.
- */
 @Composable
 fun LoginScreen(
     onEntrarClick: () -> Unit,
     onCadastreSeClick: () -> Unit
 ) {
-    var emailOrPhone by remember { mutableStateOf("") }
+    // Carrega a sugestão do último e-mail cadastrado/usado
+    var emailOrPhone by remember { mutableStateOf(UserRepository.lastSavedEmail) }
     var password by remember { mutableStateOf("") }
 
     Box(
@@ -71,14 +66,6 @@ fun LoginScreen(
                 .padding(horizontal = 28.dp),
         ) {
             Spacer(modifier = Modifier.height(90.dp))
-
-            // Área "imagem relacionada a lavagem de carro" - representada com
-            // um bloco decorativo com gradiente, já que não há imagem externa.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-            )
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -115,7 +102,15 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            AppButton(text = "Entrar", onClick = onEntrarClick)
+            AppButton(
+                text = "Entrar",
+                onClick = {
+                    if (emailOrPhone.isNotBlank()) {
+                        UserRepository.lastSavedEmail = emailOrPhone
+                    }
+                    onEntrarClick()
+                }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -123,29 +118,28 @@ fun LoginScreen(
                 text = "Esqueceu sua senha?",
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 13.sp,
-                modifier = Modifier
-                    .fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Divider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
+                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
                 Text(
                     text = "OU",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
-                Divider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
+                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             AppOutlinedButton(
                 text = "Entrar com Google",
-                onClick = { /* Login social não implementado nesta etapa */ },
+                onClick = { /* Login social */ },
                 borderColor = Color.White.copy(alpha = 0.4f),
                 contentColor = Color.White
             )

@@ -1,49 +1,47 @@
 package com.example.lavajato.data.model
 
-/**
- * Representa um agendamento do usuário.
- * Dados fictícios, utilizados apenas para exibição na tela "Meus Agendamentos".
- */
+import androidx.compose.runtime.mutableStateListOf
+
+enum class AppointmentStatus(val label: String) {
+    CONFIRMADO("Confirmado"),
+    FINALIZADO("Finalizado"),
+    CANCELADO("Cancelado")
+}
+
 data class Appointment(
-    val day: String,
-    val month: String,
+    val id: String,
     val serviceName: String,
+    val date: String,
     val time: String,
-    val addressLine1: String,
-    val addressLine2: String,
-    val status: String
+    val address: String = "Av. Recife, 123 - Boa Viagem - Recife/PE",
+    var status: AppointmentStatus = AppointmentStatus.CONFIRMADO
 )
 
 object AppointmentRepository {
-    val upcoming = listOf(
-        Appointment(
-            day = "25",
-            month = "Set",
-            serviceName = "Lavagem Simples",
-            time = "14:00",
-            addressLine1 = "Av. Recife, 123",
-            addressLine2 = "Boa Viagem - Recife/PE",
-            status = "Confirmado"
-        ),
-        Appointment(
-            day = "28",
-            month = "Set",
-            serviceName = "Higienização Interna",
-            time = "09:30",
-            addressLine1 = "Av. Recife, 123",
-            addressLine2 = "Boa Viagem - Recife/PE",
-            status = "Confirmado"
-        ),
-        Appointment(
-            day = "02",
-            month = "Out",
-            serviceName = "Completa",
-            time = "16:00",
-            addressLine1 = "Av. Recife, 123",
-            addressLine2 = "Boa Viagem - Recife/PE",
-            status = "Confirmado"
-        )
+    val list = mutableStateListOf(
+        Appointment("1", "Lavagem Simples", "25 Set", "14:00", status = AppointmentStatus.CONFIRMADO),
+        Appointment("2", "Higienização Interna", "28 Set", "09:30", status = AppointmentStatus.CONFIRMADO),
+        Appointment("3", "Completa", "02 Out", "16:00", status = AppointmentStatus.CONFIRMADO),
+        Appointment("4", "Lavagem Simples", "10 Ago", "10:00", status = AppointmentStatus.FINALIZADO)
     )
 
-    val history: List<Appointment> = emptyList()
+    fun addAppointment(serviceName: String, date: String, time: String) {
+        list.add(
+            0,
+            Appointment(
+                id = System.currentTimeMillis().toString(),
+                serviceName = serviceName,
+                date = date,
+                time = time,
+                status = AppointmentStatus.CONFIRMADO
+            )
+        )
+    }
+
+    fun updateStatus(id: String, newStatus: AppointmentStatus) {
+        val index = list.indexOfFirst { it.id == id }
+        if (index != -1) {
+            list[index] = list[index].copy(status = newStatus)
+        }
+    }
 }

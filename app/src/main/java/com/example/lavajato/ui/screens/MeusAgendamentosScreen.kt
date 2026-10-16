@@ -5,16 +5,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -30,20 +32,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.lavajato.data.model.Appointment
 import com.example.lavajato.data.model.AppointmentRepository
-import com.example.lavajato.ui.components.AppointmentCard
+import com.example.lavajato.data.model.AppointmentStatus
 import com.example.lavajato.ui.components.BottomNavigationBar
 import com.example.lavajato.ui.components.BottomTab
 import com.example.lavajato.ui.theme.LightGray
 import com.example.lavajato.ui.theme.NavyDark
 import com.example.lavajato.ui.theme.TextGraySecondary
 import com.example.lavajato.ui.theme.White
+import com.example.lavajato.ui.theme.YellowAccent
 
 private enum class AgendamentosTab { PROXIMOS, HISTORICO }
 
-/**
- * Tela 5 - Meus Agendamentos
- */
 @Composable
 fun MeusAgendamentosScreen(
     onVoltarClick: () -> Unit,
@@ -51,6 +52,14 @@ fun MeusAgendamentosScreen(
 ) {
     var selectedTab by remember { mutableStateOf(AgendamentosTab.PROXIMOS) }
     var selectedBottomTab by remember { mutableStateOf(BottomTab.AGENDAMENTOS) }
+
+    val filteredList = AppointmentRepository.list.filter {
+        if (selectedTab == AgendamentosTab.PROXIMOS) {
+            it.status == AppointmentStatus.CONFIRMADO
+        } else {
+            it.status != AppointmentStatus.CONFIRMADO
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -76,7 +85,7 @@ fun MeusAgendamentosScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVoltarClick) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar", tint = NavyDark)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = NavyDark)
                 }
                 Text(
                     text = "Meus Agendamentos",
@@ -86,7 +95,6 @@ fun MeusAgendamentosScreen(
                 )
             }
 
-            // Abas Próximos / Histórico
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -108,13 +116,7 @@ fun MeusAgendamentosScreen(
                 )
             }
 
-            val list = if (selectedTab == AgendamentosTab.PROXIMOS) {
-                AppointmentRepository.upcoming
-            } else {
-                AppointmentRepository.history
-            }
-
-            if (list.isEmpty()) {
+            if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -122,7 +124,7 @@ fun MeusAgendamentosScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Nenhum agendamento no histórico.",
+                        text = "Nenhum agendamento encontrado.",
                         color = TextGraySecondary,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
@@ -131,15 +133,70 @@ fun MeusAgendamentosScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp
-                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(list) { appointment ->
-                        AppointmentCard(appointment = appointment)
+                    items(filteredList) { appointment ->
+                        AppointmentCardCustom(
+                            appointment = appointment,
+                            onStatusChange = { newStatus ->
+                                AppointmentRepository.updateStatus(appointment.id, newStatus)
+                            }
+                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppointmentCardCustom(
+    appointment: Appointment,
+    onStatusChange: (AppointmentStatus) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(White, RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = appointment.serviceName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = NavyDark)
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (appointment.status == AppointmentStatus.CONFIRMADO) YellowAccent else LightGray,
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = appointment.status.label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NavyDark
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(text = "${appointment.date} às ${appointment.time}", fontSize = 13.sp, color = TextGraySecondary)
+        Text(text = appointment.address, fontSize = 12.sp, color = TextGraySecondary)
+
+        if (appointment.status == AppointmentStatus.CONFIRMADO) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "[ Marcar como Finalizado ]",
+                    fontSize = 12.sp,
+                    color = NavyDark,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onStatusChange(AppointmentStatus.FINALIZADO) }
+                )
             }
         }
     }
@@ -155,10 +212,7 @@ private fun TabItem(
     Box(
         modifier = modifier
             .clickable(onClick = onClick)
-            .background(
-                if (selected) NavyDark else White,
-                RoundedCornerShape(10.dp)
-            )
+            .background(if (selected) NavyDark else White, RoundedCornerShape(10.dp))
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
