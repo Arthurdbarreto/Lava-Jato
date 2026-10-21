@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.lavajato.data.model.UserRepository
 import com.example.lavajato.ui.components.AppButton
-import com.example.lavajato.ui.components.AppOutlinedButton
 import com.example.lavajato.ui.components.AppTextField
 import com.example.lavajato.ui.components.Logo
 import com.example.lavajato.ui.theme.NavyDark
@@ -123,26 +121,6 @@ fun LoginScreen(
             )
 
             Spacer(modifier = Modifier.height(20.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
-                Text(
-                    text = "OU",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            AppOutlinedButton(
-                text = "Entrar com Google",
-                onClick = { /* Login social */ },
-                borderColor = Color.White.copy(alpha = 0.4f),
-                contentColor = Color.White
-            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
