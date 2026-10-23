@@ -99,11 +99,15 @@ fun AppNavigation() {
             AvaliacoesScreen(onVoltarClick = { navController.popBackStack() })
         }
 
+
         composable(AppRoutes.PERFIL) {
             PerfilScreen(
                 onInicioClick = {
                     navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.HOME) { inclusive = true }
+                        popUpTo(AppRoutes.HOME) {
+                            inclusive = true
+                        }
+                        launchSingleTop = true
                     }
                 },
                 onAgendamentosClick = {
@@ -111,7 +115,10 @@ fun AppNavigation() {
                 },
                 onSairClick = {
                     navController.navigate(AppRoutes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                        launchSingleTop = true
                     }
                 }
             )

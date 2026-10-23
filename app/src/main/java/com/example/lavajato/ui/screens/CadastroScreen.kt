@@ -1,6 +1,9 @@
 
 package com.example.lavajato.ui.screens
 
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import android.util.Patterns
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,7 +51,7 @@ fun CadastroScreen(
     var email by remember { mutableStateOf("") }
     var modeloCarro by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
-
+    var cadastrando by remember { mutableStateOf(false) }
     var mensagemErro by remember { mutableStateOf("") }
 
     Column(
@@ -167,7 +170,7 @@ fun CadastroScreen(
                 // Botão cadastrar
                 AppButton(
                     text = "Cadastrar",
-                    onClick = {
+                    onClick = { if (cadastrando) return@AppButton
                         val nomeLimpo = nome.trim()
                         val emailLimpo = email.trim()
                         val carroLimpo = modeloCarro.trim()
@@ -194,13 +197,70 @@ fun CadastroScreen(
                         }
 
                         if (mensagemErro.isEmpty()) {
-                            UserRepository.registerUser(
-                                name = nomeLimpo,
-                                email = emailLimpo,
-                                carModel = carroLimpo
-                            )
+                            cadastrando = true
+                            mensagemErro = ""
 
-                            onCadastrarClick()
+
+                            FirebaseAuth.getInstance()
+                                .createUserWithEmailAndPassword(emailLimpo, senha)
+                                .addOnCompleteListener { task ->
+
+                                    if (task.isSuccessful) {
+                                        val usuarioFirebase = task.result?.user
+
+                                        if (usuarioFirebase == null) {
+                                            cadastrando = false
+                                            mensagemErro =
+                                                "Não foi possível identificar o usuário cadastrado."
+                                        } else {
+                                            val uid = usuarioFirebase.uid
+
+                                            val dadosUsuario = hashMapOf(
+                                                "nome" to nomeLimpo,
+                                                "email" to emailLimpo,
+                                                "modeloCarro" to carroLimpo
+                                            )
+
+                                            FirebaseFirestore.getInstance()
+                                                .collection("usuarios")
+                                                .document(uid)
+                                                .set(dadosUsuario)
+                                                .addOnSuccessListener {
+                                                    cadastrando = false
+
+                                                    UserRepository.registerUser(
+                                                        name = nomeLimpo,
+                                                        email = emailLimpo,
+                                                        carModel = carroLimpo
+                                                    )
+
+                                                    onCadastrarClick()
+                                                }
+                                                .addOnFailureListener { erro ->
+                                                    cadastrando = false
+
+                                                    mensagemErro =
+                                                        "A conta foi criada, mas não foi possível " +
+                                                                "salvar o perfil. Não tente cadastrar " +
+                                                                "novamente com o mesmo e-mail. " +
+                                                                "Detalhes: ${erro.localizedMessage ?: "Erro desconhecido"}"
+                                                }
+                                        }
+                                    } else {
+                                        cadastrando = false
+
+                                        mensagemErro = when (task.exception) {
+                                            is FirebaseAuthUserCollisionException ->
+                                                "Este e-mail já está cadastrado. Tente fazer login."
+
+                                            else ->
+                                                "Não foi possível realizar o cadastro. " +
+                                                        "Verifique sua conexão, o e-mail e a senha " +
+                                                        "e tente novamente."
+                                        }
+                                    }
+                                }
+
                         }
                     }
                 )

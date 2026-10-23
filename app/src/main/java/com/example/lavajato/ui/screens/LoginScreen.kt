@@ -1,5 +1,7 @@
+
 package com.example.lavajato.ui.screens
 
+import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,15 +40,21 @@ import com.example.lavajato.ui.components.Logo
 import com.example.lavajato.ui.theme.NavyDark
 import com.example.lavajato.ui.theme.NavyDarker
 import com.example.lavajato.ui.theme.YellowAccent
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
 @Composable
 fun LoginScreen(
     onEntrarClick: () -> Unit,
     onCadastreSeClick: () -> Unit
 ) {
-    // Carrega a sugestão do último e-mail cadastrado/usado
-    var emailOrPhone by remember { mutableStateOf(UserRepository.lastSavedEmail) }
+    var emailOrPhone by remember {
+        mutableStateOf(UserRepository.lastSavedEmail)
+    }
     var password by remember { mutableStateOf("") }
+    var mensagemErro by remember { mutableStateOf("") }
+    var carregando by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -61,7 +69,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .padding(horizontal = 28.dp)
         ) {
             Spacer(modifier = Modifier.height(90.dp))
 
@@ -76,8 +84,11 @@ fun LoginScreen(
 
             AppTextField(
                 value = emailOrPhone,
-                onValueChange = { emailOrPhone = it },
-                placeholder = "E-mail ou telefone",
+                onValueChange = {
+                    emailOrPhone = it
+                    mensagemErro = ""
+                },
+                placeholder = "E-mail",
                 leadingIcon = Icons.Default.Email,
                 keyboardType = KeyboardType.Email,
                 fieldBackground = Color.White.copy(alpha = 0.06f),
@@ -89,7 +100,10 @@ fun LoginScreen(
 
             AppTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = {
+                    password = it
+                    mensagemErro = ""
+                },
                 placeholder = "Senha",
                 leadingIcon = Icons.Default.Lock,
                 isPassword = true,
@@ -98,15 +112,94 @@ fun LoginScreen(
                 textColor = Color.White
             )
 
+            if (mensagemErro.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = mensagemErro,
+                    color = Color(0xFFFF7777),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
 
             AppButton(
-                text = "Entrar",
+                text = if (carregando) "Entrando..." else "Entrar",
                 onClick = {
-                    if (emailOrPhone.isNotBlank()) {
-                        UserRepository.lastSavedEmail = emailOrPhone
+                    if (!carregando) {
+                        val email = emailOrPhone.trim()
+
+                        when {
+                            email.isBlank() || password.isBlank() -> {
+                                mensagemErro = "Preencha o e-mail e a senha."
+                            }
+
+                            else -> {
+                                carregando = true
+                                mensagemErro = ""
+
+                                FirebaseAuth.getInstance()
+                                    .signInWithEmailAndPassword(email, password)
+                                    .addOnCompleteListener { task ->
+                                        carregando = false
+
+
+                                        if (task.isSuccessful) {
+                                            val usuario = FirebaseAuth.getInstance().currentUser
+
+                                            if (usuario == null) {
+                                                mensagemErro = "Não foi possível identificar o usuário."
+                                            } else {
+                                                FirebaseFirestore.getInstance()
+                                                    .collection("usuarios")
+                                                    .document(usuario.uid)
+                                                    .get()
+                                                    .addOnSuccessListener { documento ->
+                                                        if (documento.exists()) {
+                                                            val nome = documento.getString("nome").orEmpty()
+                                                            val email = documento.getString("email")
+                                                                ?: usuario.email.orEmpty()
+                                                            val modeloCarro =
+                                                                documento.getString("modeloCarro").orEmpty()
+
+                                                            UserRepository.registerUser(
+                                                                name = nome,
+                                                                email = email,
+                                                                carModel = modeloCarro
+                                                            )
+
+                                                            onEntrarClick()
+                                                        } else {
+                                                            UserRepository.clearUser()
+                                                            mensagemErro =
+                                                                "Sua conta existe, mas o perfil ainda não foi cadastrado."
+                                                        }
+                                                        carregando = false
+                                                    }
+                                                    .addOnFailureListener {
+                                                        carregando = false
+                                                        mensagemErro =
+                                                            "Não foi possível carregar seu perfil. Tente novamente."
+                                                    }
+                                            }
+                                        } else {
+
+                                            mensagemErro = when (task.exception) {
+                                                is FirebaseAuthInvalidUserException,
+                                                is FirebaseAuthInvalidCredentialsException ->
+                                                    "E-mail ou senha inválidos."
+
+                                                else ->
+                                                    "Não foi possível entrar. Verifique sua conexão e tente novamente."
+                                            }
+                                        }
+                                    }
+                            }
+                        }
                     }
-                    onEntrarClick()
                 }
             )
 
@@ -121,7 +214,6 @@ fun LoginScreen(
             )
 
             Spacer(modifier = Modifier.height(20.dp))
-
             Spacer(modifier = Modifier.height(24.dp))
 
             Row(
@@ -133,12 +225,15 @@ fun LoginScreen(
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 13.sp
                 )
+
                 Text(
                     text = "Cadastre-se",
                     color = YellowAccent,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
-                    modifier = Modifier.clickable(onClick = onCadastreSeClick)
+                    modifier = Modifier.clickable(
+                        onClick = onCadastreSeClick
+                    )
                 )
             }
 

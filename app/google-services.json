@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "815237081750",
+    "project_id": "lavaplus-ec6ae",
+    "storage_bucket": "lavaplus-ec6ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:815237081750:android:e2965206ac94a2d11330b7",
+        "android_client_info": {
+          "package_name": "com.example.lavajato"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaDSkf_RfD5caIrGyxxGppPt__unb1Z5Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,5 +1,6 @@
 package com.example.lavajato.ui.screens
 
+import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -148,12 +149,22 @@ fun PerfilScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Botão de Sair
-                Button(
-                    onClick = onSairClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+               Button(
+                onClick = {
+                    // Encerra a sessão no Firebase Authentication
+                    FirebaseAuth.getInstance().signOut()
+
+                    // Limpa as informações temporárias do usuário
+                    UserRepository.clearUser()
+
+                    // Retorna à tela de Login
+                    onSairClick()
+                },
+                   modifier = Modifier
+                       .fillMaxWidth()
+                       .height(52.dp),
+
+                shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = White,
                         contentColor = androidx.compose.ui.graphics.Color.Red
