@@ -1,54 +1,59 @@
 package com.example.lavajato.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.lavajato.data.model.AppointmentRepository
 import com.example.lavajato.data.model.Service
 import com.example.lavajato.data.model.ServiceRepository
-import com.example.lavajato.ui.components.AppButton
-import com.example.lavajato.ui.components.ServiceSelectableCard
-import com.example.lavajato.ui.theme.LightGray
-import com.example.lavajato.ui.theme.NavyDark
-import com.example.lavajato.ui.theme.TextGraySecondary
-import com.example.lavajato.ui.theme.White
-import com.example.lavajato.ui.theme.YellowAccent
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private data class BookingStep(val number: Int, val label: String)
-private val bookingSteps = listOf(
-    BookingStep(1, "Serviço"),
-    BookingStep(2, "Veículo"),
-    BookingStep(3, "Data"),
-    BookingStep(4, "Horário"),
-    BookingStep(5, "Confirmar")
+private val Blue = Color(0xFF1976FF)
+private val Dark = Color(0xFF091C35)
+private val Muted = Color(0xFF7D8DA4)
+private val Border = Color(0xFFDCE5F1)
+private val Pale = Color(0xFFF4F7FB)
+private val LightBlue = Color(0xFFEAF2FF)
+private val BrazilianLocale = Locale("pt", "BR")
+private val DateLabel = DateTimeFormatter.ofPattern(
+    "dd 'de' MMMM, EEEE", BrazilianLocale
+)
+private val MonthLabel = DateTimeFormatter.ofPattern(
+    "MMMM yyyy", BrazilianLocale
+)
+private val HourFormat = DateTimeFormatter.ofPattern("HH:mm")
+
+private val BookingHours = listOf(
+    "08:00", "09:00", "10:00",
+    "11:00", "13:00", "14:00",
+    "14:30", "15:00", "16:00", "17:00"
 )
 
 private data class BookingVehicle(
@@ -56,239 +61,287 @@ private data class BookingVehicle(
     val marca: String,
     val modelo: String,
     val placa: String,
-    val cor: String
+    val cor: String,
+    val principal: Boolean = false
 )
-
-private val dateDisplayFormatter = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy", Locale("pt", "BR"))
-private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-private val bookingTimes = listOf("08:00", "09:30", "11:00", "14:00", "15:30", "17:00")
 
 @Composable
 fun AgendamentoScreen(
     onVoltarClick: () -> Unit,
     onConcluidoClick: () -> Unit
 ) {
-    var currentStep by remember { mutableIntStateOf(1) }
-    var selectedService by remember { mutableStateOf<Service?>(null) }
-    var selectedVehicleId by remember { mutableStateOf<String?>(null) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    var selectedTime by remember { mutableStateOf<String?>(null) }
-    var vehicles by remember { mutableStateOf<List<BookingVehicle>>(emptyList()) }
+    var step by remember { mutableIntStateOf(1) }
+    var service by remember { mutableStateOf<Service?>(null) }
+    var vehicleId by remember { mutableStateOf<String?>(null) }
+    var date by remember { mutableStateOf<LocalDate?>(null) }
+    var hour by remember { mutableStateOf<String?>(null) }
+
+    var vehicles by remember {
+        mutableStateOf<List<BookingVehicle>>(emptyList())
+    }
     var loadingVehicles by remember { mutableStateOf(true) }
     var vehicleError by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+
     val uid = FirebaseAuth.getInstance().currentUser?.uid
     val firestore = remember { FirebaseFirestore.getInstance() }
+    val selectedVehicle = vehicles.firstOrNull { it.id == vehicleId }
 
-    // Recalcula o relógio ao retornar ao fluxo e imediatamente antes de avançar.
-    var clockNow by remember { mutableStateOf(LocalDateTime.now()) }
-    val today = clockNow.toLocalDate()
-    val availableDates = (0L..29L).map { today.plusDays(it) }
-    val availableTimes = bookingTimes.filter { time ->
-        val date = selectedDate
-        date != null && !date.isBefore(today) &&
-                (date.isAfter(today) || LocalTime.parse(time, timeFormatter).isAfter(clockNow.toLocalTime()))
+    // Seleciona o veículo principal ao entrar na etapa 2.
+    // Não substitui uma escolha manual já realizada.
+    LaunchedEffect(step, loadingVehicles, vehicles) {
+        if (step == 2 && !loadingVehicles && vehicleId == null) {
+            vehicleId = vehicles.firstOrNull { it.principal }?.id
+        }
     }
-    val selectedVehicle = vehicles.firstOrNull { it.id == selectedVehicleId }
 
+    // Carrega os veículos cadastrados no Firestore.
     DisposableEffect(uid) {
         var registration: ListenerRegistration? = null
+
         if (uid == null) {
             loadingVehicles = false
-            vehicleError = "Entre na sua conta para escolher um veículo."
+            vehicleError = "Entre na sua conta para selecionar um veículo."
         } else {
-            registration = firestore.collection("usuarios").document(uid)
+            registration = firestore.collection("usuarios")
+                .document(uid)
                 .collection("veiculos")
                 .addSnapshotListener { snapshot, error ->
                     loadingVehicles = false
+
                     if (error != null) {
-                        vehicleError = "Não foi possível consultar seus veículos: ${error.localizedMessage}"
+                        vehicleError = error.localizedMessage
+                            ?: "Não foi possível carregar os veículos."
                     } else {
                         vehicleError = null
-                        vehicles = snapshot?.documents?.map { doc ->
+
+                        vehicles = snapshot?.documents?.map { document ->
                             BookingVehicle(
-                                id = doc.id,
-                                marca = doc.getString("marca").orEmpty(),
-                                modelo = doc.getString("modelo").orEmpty(),
-                                placa = doc.getString("placa").orEmpty(),
-                                cor = doc.getString("cor").orEmpty()
+                                id = document.id,
+                                marca = document.getString("marca").orEmpty(),
+                                modelo = document.getString("modelo").orEmpty(),
+                                placa = document.getString("placa").orEmpty(),
+                                cor = document.getString("cor").orEmpty(),
+                                principal = document.getBoolean("principal") == true
                             )
-                        }.orEmpty().sortedWith(compareBy({ it.marca }, { it.modelo }))
+                        }.orEmpty().sortedWith(
+                            compareByDescending<BookingVehicle> {
+                                it.principal
+                            }.thenBy {
+                                it.marca.lowercase(BrazilianLocale)
+                            }.thenBy {
+                                it.modelo.lowercase(BrazilianLocale)
+                            }
+                        )
+
+                        // Evita manter selecionado um veículo excluído.
+                        if (
+                            vehicleId != null &&
+                            vehicles.none { it.id == vehicleId }
+                        ) {
+                            vehicleId = null
+                        }
                     }
                 }
         }
-        onDispose { registration?.remove() }
+
+        onDispose {
+            registration?.remove()
+        }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(LightGray)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        BookingHeader(
+            step = step,
+            onBack = {
                 message = null
-                if (currentStep > 1) currentStep-- else onVoltarClick()
-            }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = NavyDark)
+                if (step > 1) {
+                    step--
+                } else {
+                    onVoltarClick()
+                }
             }
-            Text("Agendar Serviço", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+        )
+
+        HorizontalDivider(color = Border)
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            BookingProgress(step)
+
+            when (step) {
+                1 -> ServiceStep(
+                    selected = service,
+                    onSelect = { service = it }
+                )
+
+                2 -> VehicleStep(
+                    vehicles = vehicles,
+                    selectedId = vehicleId,
+                    loading = loadingVehicles,
+                    error = vehicleError,
+                    onSelect = { vehicleId = it }
+                )
+
+                3 -> DateStep(
+                    selected = date,
+                    today = now.toLocalDate(),
+                    onSelect = {
+                        date = it
+                        hour = null
+                    }
+                )
+
+                4 -> TimeStep(
+                    service = service,
+                    vehicle = selectedVehicle,
+                    date = date,
+                    selected = hour,
+                    now = now,
+                    onSelect = { hour = it }
+                )
+            }
         }
 
+        if (message != null) {
+            Text(
+                text = message.orEmpty(),
+                color = Color(0xFFB3261E),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+        }
+
+        HorizontalDivider(color = Border)
+
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            bookingSteps.forEach { step ->
-                val active = step.number == currentStep
-                val done = step.number < currentStep
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier.size(29.dp)
-                            .background(if (active || done) YellowAccent else White, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(step.number.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NavyDark)
-                    }
-                    Spacer(Modifier.height(4.dp))
+            if (step == 1 && service != null) {
+                Column(modifier = Modifier.padding(end = 14.dp)) {
                     Text(
-                        step.label, fontSize = 10.sp,
-                        color = if (active) NavyDark else TextGraySecondary,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                        text = "Total",
+                        fontSize = 11.sp,
+                        color = Muted
+                    )
+                    Text(
+                        text = "R$ ${service!!.price}",
+                        fontWeight = FontWeight.Bold,
+                        color = Dark
                     )
                 }
             }
-        }
 
-        Box(modifier = Modifier.weight(1f)) {
-            when (currentStep) {
-                1 -> StepService(selectedService) { selectedService = it }
-                2 -> StepVehicle(vehicles, selectedVehicleId, loadingVehicles, vehicleError) {
-                    selectedVehicleId = it
-                }
-                3 -> StepDate(availableDates, selectedDate) {
-                    selectedDate = it
-                    selectedTime = null
-                }
-                4 -> StepTime(availableTimes, selectedTime) { selectedTime = it }
-                5 -> StepConfirmation(selectedService, selectedVehicle, selectedDate, selectedTime)
-            }
-        }
-
-        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-            if (message != null) {
-                Text(message.orEmpty(), color = androidx.compose.ui.graphics.Color(0xFFC62828), fontSize = 13.sp)
-                Spacer(Modifier.height(8.dp))
-            }
-            AppButton(
-                text = if (saving) "Salvando..." else if (currentStep == 5) "Confirmar Agendamento" else "Próximo",
+            Button(
                 onClick = {
-                    if (saving) return@AppButton
-                    clockNow = LocalDateTime.now()
-                    val now = LocalDateTime.now()
-                    val chosenDate = selectedDate
-                    val chosenTime = selectedTime
-                    val dateTimeValid = chosenDate != null && chosenTime != null &&
-                            !LocalDateTime.of(chosenDate, LocalTime.parse(chosenTime, timeFormatter)).isBefore(now) &&
-                            LocalDateTime.of(chosenDate, LocalTime.parse(chosenTime, timeFormatter)).isAfter(now)
+                    if (saving) return@Button
 
-                    message = when (currentStep) {
-                        1 -> if (selectedService == null) "Selecione um serviço." else null
-                        2 -> if (selectedVehicle == null) "Selecione um veículo cadastrado." else null
-                        3 -> if (chosenDate == null || chosenDate.isBefore(now.toLocalDate())) "Selecione uma data válida." else null
-                        4 -> if (!dateTimeValid) "Selecione um horário futuro." else null
-                        else -> when {
-                            selectedService == null -> "Selecione um serviço."
-                            selectedVehicle == null -> "Selecione um veículo cadastrado."
-                            !dateTimeValid -> "A data ou o horário passou. Escolha outro horário."
-                            else -> null
+                    now = LocalDateTime.now()
+                    message = null
+
+                    when (step) {
+                        1 -> {
+                            if (service == null) {
+                                message = "Selecione um serviço."
+                            } else {
+                                step = 2
+                            }
                         }
-                    }
-                    if (message == null) {
-                        if (currentStep < 5) {
-                            currentStep++
-                        } else {
-                            val service = selectedService!!
-                            val vehicle = selectedVehicle!!
-                            saving = true
-                            AppointmentRepository.addAppointment(
-                                serviceName = service.name,
-                                date = chosenDate!!.toString(),
-                                time = chosenTime!!,
-                                vehicleId = vehicle.id,
-                                vehicleDescription = "${vehicle.marca} ${vehicle.modelo}",
-                                vehiclePlate = vehicle.placa
-                            ) { error ->
-                                saving = false
-                                if (error == null) onConcluidoClick()
-                                else message = "Não foi possível salvar: $error"
+
+                        2 -> {
+                            if (selectedVehicle == null) {
+                                message = "Selecione um veículo cadastrado."
+                            } else {
+                                step = 3
+                            }
+                        }
+
+                        3 -> {
+                            if (
+                                date == null ||
+                                date!!.isBefore(now.toLocalDate())
+                            ) {
+                                message = "Selecione uma data válida."
+                            } else {
+                                step = 4
+                            }
+                        }
+
+                        4 -> {
+                            val chosenDate = date
+                            val chosenHour = hour
+                            val chosenVehicle = selectedVehicle
+                            val chosenService = service
+
+                            val validDateTime =
+                                chosenDate != null &&
+                                        chosenHour != null &&
+                                        LocalDateTime.of(
+                                            chosenDate,
+                                            LocalTime.parse(chosenHour, HourFormat)
+                                        ).isAfter(now)
+
+                            if (!validDateTime) {
+                                message = "Escolha um horário futuro."
+                            } else if (
+                                chosenVehicle == null ||
+                                chosenService == null
+                            ) {
+                                message = "Confira os dados do agendamento."
+                            } else {
+                                saving = true
+
+                                AppointmentRepository.addAppointment(
+                                    serviceName = chosenService.name,
+                                    date = chosenDate!!.toString(),
+                                    time = chosenHour!!,
+                                    vehicleId = chosenVehicle.id,
+                                    vehicleDescription =
+                                        "${chosenVehicle.marca} ${chosenVehicle.modelo}",
+                                    vehiclePlate = chosenVehicle.placa
+                                ) { error ->
+                                    saving = false
+
+                                    if (error == null) {
+                                        onConcluidoClick()
+                                    } else {
+                                        message = "Não foi possível salvar: $error"
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun StepService(selected: Service?, onSelect: (Service) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(ServiceRepository.services) { service ->
-            ServiceSelectableCard(
-                service = service,
-                selected = selected?.id == service.id,
-                onSelect = { onSelect(service) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun StepVehicle(
-    vehicles: List<BookingVehicle>,
-    selectedId: String?,
-    loading: Boolean,
-    error: String?,
-    onSelect: (String) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Text("Selecione o veículo", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NavyDark)
-        Spacer(Modifier.height(12.dp))
-        when {
-            loading -> CircularProgressIndicator()
-            error != null -> Text(error, color = androidx.compose.ui.graphics.Color(0xFFC62828))
-            vehicles.isEmpty() -> Text("Nenhum veículo cadastrado. Acesse Perfil → Meus veículos para adicionar um.", color = TextGraySecondary)
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(vehicles, key = { it.id }) { vehicle ->
-                    SelectableBookingBox(
-                        title = "${vehicle.marca} ${vehicle.modelo}",
-                        subtitle = "${vehicle.placa} • ${vehicle.cor}",
-                        selected = vehicle.id == selectedId,
-                        onClick = { onSelect(vehicle.id) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StepDate(dates: List<LocalDate>, selected: LocalDate?, onSelect: (LocalDate) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Text("Selecione a data", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NavyDark)
-        Spacer(Modifier.height(12.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(dates, key = { it.toString() }) { date ->
-                SelectableBookingBox(
-                    title = date.format(dateDisplayFormatter).replaceFirstChar { it.titlecase(Locale("pt", "BR")) },
-                    subtitle = if (date == LocalDate.now()) "Hoje" else "",
-                    selected = date == selected,
-                    onClick = { onSelect(date) }
+                },
+                enabled = !saving,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Blue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = when {
+                        saving -> "Salvando..."
+                        step == 4 -> "Confirmar horário"
+                        else -> "Continuar"
+                    },
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -296,24 +349,154 @@ private fun StepDate(dates: List<LocalDate>, selected: LocalDate?, onSelect: (Lo
 }
 
 @Composable
-private fun StepTime(times: List<String>, selected: String?, onSelect: (String) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Text("Selecione o horário", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NavyDark)
-        Spacer(Modifier.height(12.dp))
-        if (times.isEmpty()) {
-            Text("Não há horários futuros para esta data. Volte e escolha outro dia.", color = TextGraySecondary)
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+private fun BookingHeader(
+    step: Int,
+    onBack: () -> Unit
+) {
+    val title = when (step) {
+        1 -> "Escolha o serviço"
+        2 -> "Selecionar veículo"
+        3 -> "Escolha a data"
+        else -> "Escolha o horário"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(68.dp)
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 12.dp)
+                .background(Pale, RoundedCornerShape(12.dp))
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Voltar",
+                tint = Dark
+            )
+        }
+
+        Text(
+            text = title,
+            fontSize = 17.sp,
+            color = Dark,
+            modifier = Modifier.align(Alignment.Center)
+        )
+    }
+}
+
+@Composable
+private fun BookingProgress(step: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "$step de 4",
+            fontSize = 11.sp,
+            color = Muted
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            repeat(4) { index ->
+                Box(
+                    modifier = Modifier
+                        .width(29.dp)
+                        .height(3.dp)
+                        .background(
+                            color = if (index < step) Blue else Border,
+                            shape = RoundedCornerShape(3.dp)
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceStep(
+    selected: Service?,
+    onSelect: (Service) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            horizontal = 20.dp,
+            vertical = 8.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            EstablishmentCard()
+            Spacer(Modifier.height(22.dp))
+
+            Text(
+                text = "Qual cuidado seu carro precisa?",
+                fontSize = 17.sp,
+                color = Dark
+            )
+
+            Spacer(Modifier.height(12.dp))
+        }
+
+        items(ServiceRepository.services) { item ->
+            val active = selected?.id == item.id
+
+            Surface(
+                onClick = { onSelect(item) },
+                shape = RoundedCornerShape(14.dp),
+                color = if (active) Pale else Color.White,
+                border = BorderStroke(
+                    width = if (active) 1.5.dp else 1.dp,
+                    color = if (active) Blue else Border
+                )
             ) {
-                items(times) { time ->
-                    SelectableBookingBox(
-                        title = time,
-                        subtitle = "",
-                        selected = time == selected,
-                        onClick = { onSelect(time) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(15.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = active,
+                        onClick = { onSelect(item) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Blue
+                        )
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.name,
+                            color = Dark,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+
+                        Spacer(Modifier.height(5.dp))
+
+                        Text(
+                            text = "Selecione para agendar",
+                            color = Muted,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Text(
+                        text = "R$ ${item.price}",
+                        color = Blue,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -322,42 +505,659 @@ private fun StepTime(times: List<String>, selected: String?, onSelect: (String) 
 }
 
 @Composable
-private fun StepConfirmation(
-    service: Service?,
-    vehicle: BookingVehicle?,
-    date: LocalDate?,
-    time: String?
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(20.dp)
-            .background(White, RoundedCornerShape(16.dp)).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun EstablishmentCard() {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Border),
+        color = Color.White
     ) {
-        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = YellowAccent, modifier = Modifier.size(60.dp))
-        Spacer(Modifier.height(12.dp))
-        Text("Resumo do Agendamento", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NavyDark)
-        Spacer(Modifier.height(16.dp))
-        Text("Serviço: ${service?.name.orEmpty()}", fontSize = 14.sp)
-        Text("Valor: R$ ${service?.price ?: 0.0}", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text("Veículo: ${vehicle?.marca.orEmpty()} ${vehicle?.modelo.orEmpty()}", fontSize = 14.sp)
-        Text("Placa: ${vehicle?.placa.orEmpty()}", fontSize = 14.sp)
-        Text("Data: ${date?.format(dateDisplayFormatter).orEmpty()}", fontSize = 14.sp)
-        Text("Horário: ${time.orEmpty()}", fontSize = 14.sp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(45.dp)
+                    .background(
+                        LightBlue,
+                        RoundedCornerShape(10.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🚘", fontSize = 22.sp)
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Lava Jato Prime",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Dark
+                )
+
+                Text(
+                    text = "Serviços automotivos",
+                    fontSize = 11.sp,
+                    color = Muted
+                )
+            }
+
+            Text(
+                text = "● Aberto",
+                color = Color(0xFF21866B),
+                fontSize = 11.sp
+            )
+        }
     }
 }
 
+// =============================================
+// ETAPA 2 — SELEÇÃO DO VEÍCULO
+// =============================================
+
 @Composable
-private fun SelectableBookingBox(title: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .background(if (selected) NavyDark else White, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(16.dp)
+private fun VehicleStep(
+    vehicles: List<BookingVehicle>,
+    selectedId: String?,
+    loading: Boolean,
+    error: String?,
+    onSelect: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            horizontal = 20.dp,
+            vertical = 8.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(title, color = if (selected) White else NavyDark, fontWeight = FontWeight.SemiBold)
-        if (subtitle.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(subtitle, color = if (selected) White else TextGraySecondary, fontSize = 12.sp)
+        item {
+            Text(
+                text = "Qual veículo receberá o serviço?",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Dark
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                text = "Escolha um dos seus veículos cadastrados.",
+                fontSize = 13.sp,
+                color = Muted
+            )
+
+            Spacer(Modifier.height(12.dp))
         }
+
+        when {
+            loading -> {
+                item {
+                    CircularProgressIndicator(color = Blue)
+                }
+            }
+
+            error != null -> {
+                item {
+                    Text(
+                        text = error,
+                        color = Color.Red,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            vehicles.isEmpty() -> {
+                item {
+                    Text(
+                        text = "Nenhum veículo cadastrado. Acesse Perfil → Meus veículos.",
+                        color = Muted,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            else -> {
+                items(
+                    items = vehicles,
+                    key = { it.id }
+                ) { vehicle ->
+                    val active = vehicle.id == selectedId
+                    val isPrincipal = vehicle.principal
+
+                    val backgroundColor = when {
+                        active -> LightBlue
+                        isPrincipal -> Color(0xFFF3F8FF)
+                        else -> Color.White
+                    }
+
+                    val borderColor = when {
+                        active -> Blue
+                        isPrincipal -> Color(0xFF91BCFF)
+                        else -> Border
+                    }
+
+                    Surface(
+                        onClick = { onSelect(vehicle.id) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = backgroundColor,
+                        border = BorderStroke(
+                            width = if (active) 2.dp else 1.dp,
+                            color = borderColor
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = active,
+                                onClick = { onSelect(vehicle.id) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Blue
+                                )
+                            )
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .background(
+                                        color = if (isPrincipal) {
+                                            Color(0xFFDCEBFF)
+                                        } else {
+                                            LightBlue
+                                        },
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "🚙",
+                                    fontSize = 22.sp
+                                )
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    text = "${vehicle.marca} ${vehicle.modelo}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Dark
+                                )
+
+                                Text(
+                                    text = "${vehicle.placa} · ${vehicle.cor}",
+                                    fontSize = 11.sp,
+                                    color = Muted
+                                )
+
+                                if (isPrincipal) {
+                                    Spacer(Modifier.height(3.dp))
+
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = Color(0xFFDCEBFF)
+                                    ) {
+                                        Text(
+                                            text = "★ Principal",
+                                            modifier = Modifier.padding(
+                                                horizontal = 10.dp,
+                                                vertical = 5.dp
+                                            ),
+                                            color = Blue,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (active) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Veículo selecionado",
+                                    tint = Blue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(Modifier.height(8.dp))
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, Border)
+            ) {
+                Text(
+                    text = "Para cadastrar outro veículo, acesse Perfil → Meus veículos.",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    color = Blue,
+                    textAlign = TextAlign.Center,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+// =============================================
+// ETAPA 3 — CALENDÁRIO
+// =============================================
+
+@Composable
+private fun DateStep(
+    selected: LocalDate?,
+    today: LocalDate,
+    onSelect: (LocalDate) -> Unit
+) {
+    var visibleMonth by remember {
+        mutableStateOf(YearMonth.from(today))
+    }
+
+    val lastDate = today.plusDays(29)
+    val firstMonth = YearMonth.from(today)
+    val lastMonth = YearMonth.from(lastDate)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(15.dp),
+            color = Pale
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                SummaryLine(
+                    "Estabelecimento",
+                    "Lava Jato Prime"
+                )
+                Spacer(Modifier.height(8.dp))
+                SummaryLine(
+                    "Disponibilidade",
+                    "Próximos 30 dias"
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Border),
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(
+                        enabled = visibleMonth > firstMonth,
+                        onClick = {
+                            visibleMonth = visibleMonth.minusMonths(1)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            contentDescription = "Mês anterior",
+                            tint = Dark
+                        )
+                    }
+
+                    Text(
+                        text = visibleMonth.format(MonthLabel)
+                            .replaceFirstChar {
+                                it.titlecase(BrazilianLocale)
+                            },
+                        fontWeight = FontWeight.SemiBold,
+                        color = Dark
+                    )
+
+                    IconButton(
+                        enabled = visibleMonth < lastMonth,
+                        onClick = {
+                            visibleMonth = visibleMonth.plusMonths(1)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowRight,
+                            contentDescription = "Próximo mês",
+                            tint = Dark
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                val weekdays = listOf(
+                    "D", "S", "T", "Q", "Q", "S", "S"
+                )
+
+                Row(Modifier.fillMaxWidth()) {
+                    weekdays.forEach { day ->
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = day,
+                                color = Muted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                val firstDay = visibleMonth.atDay(1)
+                val offset = firstDay.dayOfWeek.value % 7
+                val totalDays = visibleMonth.lengthOfMonth()
+                val totalCells =
+                    ((offset + totalDays + 6) / 7) * 7
+
+                repeat(totalCells / 7) { week ->
+                    Row(Modifier.fillMaxWidth()) {
+                        repeat(7) { weekday ->
+                            val number =
+                                week * 7 + weekday - offset + 1
+
+                            val day = if (number in 1..totalDays) {
+                                visibleMonth.atDay(number)
+                            } else {
+                                null
+                            }
+
+                            val enabled =
+                                day != null &&
+                                        !day.isBefore(today) &&
+                                        !day.isAfter(lastDate)
+
+                            val active =
+                                day != null && day == selected
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(47.dp)
+                                    .padding(3.dp)
+                                    .background(
+                                        color = if (active) {
+                                            Blue
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .then(
+                                        if (enabled) {
+                                            Modifier.clickable {
+                                                onSelect(day!!)
+                                            }
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = day?.dayOfMonth
+                                        ?.toString()
+                                        .orEmpty(),
+                                    fontSize = 12.sp,
+                                    color = when {
+                                        active -> Color.White
+                                        enabled -> Dark
+                                        else -> Border
+                                    },
+                                    fontWeight = if (active) {
+                                        FontWeight.Bold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = "Selecione uma data disponível no calendário.",
+            fontSize = 12.sp,
+            color = Muted
+        )
+    }
+}
+
+// =============================================
+// ETAPA 4 — HORÁRIO E CONFIRMAÇÃO
+// =============================================
+
+@Composable
+private fun TimeStep(
+    service: Service?,
+    vehicle: BookingVehicle?,
+    date: LocalDate?,
+    selected: String?,
+    now: LocalDateTime,
+    onSelect: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp)
+    ) {
+        if (date != null) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = LightBlue,
+                border = BorderStroke(1.dp, Border)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(15.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📅",
+                        fontSize = 24.sp
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = "DATA SELECIONADA",
+                            color = Blue,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = date.format(DateLabel),
+                            color = Dark,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Pale
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                SummaryLine(
+                    "Estabelecimento",
+                    "Lava Jato Prime"
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                SummaryLine(
+                    "Serviço",
+                    service?.name.orEmpty()
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                SummaryLine(
+                    "Veículo",
+                    if (vehicle == null) {
+                        ""
+                    } else {
+                        "${vehicle.marca} ${vehicle.modelo} · ${vehicle.placa}"
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(22.dp))
+
+        Text(
+            text = "Horários disponíveis",
+            color = Dark,
+            fontSize = 17.sp
+        )
+
+        Spacer(Modifier.height(5.dp))
+
+        Text(
+            text = "Selecione o melhor horário para você.",
+            color = Muted,
+            fontSize = 13.sp
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        BookingHours.chunked(3).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { time ->
+                    val future =
+                        date != null &&
+                                LocalDateTime.of(
+                                    date,
+                                    LocalTime.parse(time, HourFormat)
+                                ).isAfter(now)
+
+                    val active = time == selected
+
+                    Surface(
+                        onClick = { onSelect(time) },
+                        enabled = future,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(11.dp),
+                        color = when {
+                            active -> Blue
+                            !future -> Color(0xFFF1F3F6)
+                            else -> Color.White
+                        },
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (active) Blue else Border
+                        )
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = time,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = when {
+                                    active -> Color.White
+                                    !future -> Color.LightGray
+                                    else -> Dark
+                                }
+                            )
+                        }
+                    }
+                }
+
+                repeat(3 - row.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+
+            Spacer(Modifier.height(9.dp))
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Text(
+            text = "Horários desabilitados já passaram. A disponibilidade real do estabelecimento será integrada futuramente.",
+            color = Muted,
+            fontSize = 11.sp
+        )
+    }
+}
+
+// =============================================
+// COMPONENTE AUXILIAR
+// =============================================
+
+@Composable
+private fun SummaryLine(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            color = Muted,
+            fontSize = 11.sp
+        )
+
+        Spacer(Modifier.width(10.dp))
+
+        Text(
+            text = value,
+            color = Dark,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End
+        )
     }
 }

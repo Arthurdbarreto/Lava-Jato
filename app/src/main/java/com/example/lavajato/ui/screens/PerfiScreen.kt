@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -45,7 +47,9 @@ private data class VeiculoPerfil(
     val marca: String = "",
     val modelo: String = "",
     val placa: String = "",
-    val cor: String = ""
+    val cor: String = "",
+    val ano: String = "",
+    val principal: Boolean = false
 )
 
 @Composable
@@ -135,11 +139,14 @@ fun PerfilScreen(
                                 marca = documento.getString("marca").orEmpty(),
                                 modelo = documento.getString("modelo").orEmpty(),
                                 placa = documento.getString("placa").orEmpty(),
-                                cor = documento.getString("cor").orEmpty()
+                                cor = documento.getString("cor").orEmpty(),
+                                ano = documento.getString("ano").orEmpty(),
+                                principal = documento.getBoolean("principal") ?: false
                             )
                         }
                         ?.sortedWith(
-                            compareBy(
+                            compareBy<VeiculoPerfil>(
+                                { !it.principal },
                                 { it.marca.lowercase() },
                                 { it.modelo.lowercase() }
                             )
@@ -410,8 +417,18 @@ fun PerfilScreen(
                                 fontSize = 14.sp
                             )
 
+                            if (veiculo.principal) {
+                                Text(
+                                    text = "★ Veículo principal",
+                                    color = PerfilBlue,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
                             Text(
-                                text = "${veiculo.placa} • ${veiculo.cor}",
+                                text = "${veiculo.placa} • ${veiculo.cor}" +
+                                        if (veiculo.ano.isNotBlank()) " • ${veiculo.ano}" else "",
                                 color = PerfilSecondary,
                                 fontSize = 12.sp
                             )
@@ -509,7 +526,7 @@ fun PerfilScreen(
                     mostrarFormulario = false
                 }
             },
-            onSalvar = { marca, modelo, placa, cor ->
+            onSalvar = { marca, modelo, placa, cor, ano, principal ->
                 if (uid != null && !salvando) {
                     salvando = true
 
@@ -518,27 +535,40 @@ fun PerfilScreen(
                         .document(uid)
                         .collection("veiculos")
 
-                    val dados = hashMapOf(
-                        "marca" to marca,
-                        "modelo" to modelo,
-                        "placa" to placa,
-                        "cor" to cor
-                    )
-
                     val referencia = veiculoEditando?.let {
                         colecao.document(it.id)
                     } ?: colecao.document()
 
-                    referencia.set(dados)
+                    val dados = hashMapOf<String, Any>(
+                        "marca" to marca,
+                        "modelo" to modelo,
+                        "placa" to placa,
+                        "cor" to cor,
+                        "ano" to ano,
+                        "principal" to principal
+                    )
+
+                    // Uma operação em lote evita que dois veículos permaneçam
+                    // marcados como principais após uma troca bem-sucedida.
+                    val lote = firestore.batch()
+                    if (principal) {
+                        veiculos.filter { it.id != referencia.id && it.principal }
+                            .forEach { outro ->
+                                lote.update(colecao.document(outro.id), "principal", false)
+                            }
+                    }
+                    lote.set(referencia, dados)
+                    lote.commit()
                         .addOnSuccessListener {
                             salvando = false
                             mostrarFormulario = false
                             veiculoEditando = null
+                            mensagemVeiculos = ""
                         }
-                        .addOnFailureListener {
+                        .addOnFailureListener { erro ->
                             salvando = false
                             mensagemVeiculos =
-                                "Não foi possível salvar o veículo."
+                                "Não foi possível salvar o veículo: ${erro.localizedMessage ?: "erro desconhecido"}"
                         }
                 }
             }
@@ -609,137 +639,149 @@ private fun FormularioVeiculoDialog(
     veiculo: VeiculoPerfil?,
     salvando: Boolean,
     onDismiss: () -> Unit,
-    onSalvar: (String, String, String, String) -> Unit
+    onSalvar: (String, String, String, String, String, Boolean) -> Unit
 ) {
-    var marca by remember(veiculo?.id) {
-        mutableStateOf(veiculo?.marca.orEmpty())
-    }
-
-    var modelo by remember(veiculo?.id) {
-        mutableStateOf(veiculo?.modelo.orEmpty())
-    }
-
-    var placa by remember(veiculo?.id) {
-        mutableStateOf(veiculo?.placa.orEmpty())
-    }
-
-    var cor by remember(veiculo?.id) {
-        mutableStateOf(veiculo?.cor.orEmpty())
-    }
-
-    var erro by remember {
-        mutableStateOf("")
-    }
+    var marca by remember(veiculo?.id) { mutableStateOf(veiculo?.marca.orEmpty()) }
+    var modelo by remember(veiculo?.id) { mutableStateOf(veiculo?.modelo.orEmpty()) }
+    var placa by remember(veiculo?.id) { mutableStateOf(veiculo?.placa.orEmpty()) }
+    var cor by remember(veiculo?.id) { mutableStateOf(veiculo?.cor.orEmpty()) }
+    var ano by remember(veiculo?.id) { mutableStateOf(veiculo?.ano.orEmpty()) }
+    var principal by remember(veiculo?.id) { mutableStateOf(veiculo?.principal ?: false) }
+    var erro by remember(veiculo?.id) { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!salvando) onDismiss() },
+        shape = RoundedCornerShape(24.dp),
+        containerColor = Color.White,
         title = {
-            Text(
-                if (veiculo == null) {
-                    "Adicionar veículo"
-                } else {
-                    "Editar veículo"
-                }
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    text = if (veiculo == null) "Cadastrar veículo" else "Editar veículo",
+                    color = PerfilNavy,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Preencha os dados do veículo para seus agendamentos.",
+                    color = PerfilSecondary,
+                    fontSize = 12.sp
+                )
+            }
         },
         text = {
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedTextField(
                     value = marca,
-                    onValueChange = {
-                        marca = it
-                        erro = ""
-                    },
+                    onValueChange = { marca = it; erro = "" },
                     label = { Text("Marca") },
-                    singleLine = true
+                    placeholder = { Text("Ex.: Toyota") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-
                 OutlinedTextField(
                     value = modelo,
-                    onValueChange = {
-                        modelo = it
-                        erro = ""
-                    },
+                    onValueChange = { modelo = it; erro = "" },
                     label = { Text("Modelo") },
-                    singleLine = true
+                    placeholder = { Text("Ex.: Corolla") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-
                 OutlinedTextField(
                     value = placa,
                     onValueChange = {
-                        placa = it.uppercase().filter { caractere ->
-                            caractere.isLetterOrDigit()
-                        }.take(7)
+                        placa = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(7)
                         erro = ""
                     },
                     label = { Text("Placa") },
-                    singleLine = true
+                    placeholder = { Text("ABC1D23") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-
                 OutlinedTextField(
                     value = cor,
+                    onValueChange = { cor = it; erro = "" },
+                    label = { Text("Cor") },
+                    placeholder = { Text("Ex.: Prata") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = ano,
                     onValueChange = {
-                        cor = it
+                        ano = it.filter { c -> c.isDigit() }.take(4)
                         erro = ""
                     },
-                    label = { Text("Cor") },
-                    singleLine = true
+                    label = { Text("Ano") },
+                    placeholder = { Text("Ex.: 2022") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-
-                if (erro.isNotBlank()) {
-                    Text(
-                        text = erro,
-                        color = PerfilRed,
-                        fontSize = 12.sp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Veículo principal", color = PerfilNavy, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Destacar este veículo na sua lista",
+                            color = PerfilSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Switch(
+                        checked = principal,
+                        onCheckedChange = { principal = it },
+                        colors = SwitchDefaults.colors(checkedTrackColor = PerfilBlue)
                     )
+                }
+                if (erro.isNotBlank()) {
+                    Text(erro, color = PerfilRed, fontSize = 12.sp)
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 enabled = !salvando,
+                colors = ButtonDefaults.buttonColors(containerColor = PerfilBlue),
+                shape = RoundedCornerShape(12.dp),
                 onClick = {
                     val marcaLimpa = marca.trim()
                     val modeloLimpo = modelo.trim()
                     val placaLimpa = placa.trim()
                     val corLimpa = cor.trim()
-
+                    val anoLimpo = ano.trim()
                     erro = when {
-                        marcaLimpa.isBlank() ||
-                                modeloLimpo.isBlank() ||
-                                placaLimpa.isBlank() ||
-                                corLimpa.isBlank() ->
-                            "Preencha todos os campos."
-
-                        placaLimpa.length != 7 ->
-                            "A placa deve ter 7 caracteres."
-
+                        listOf(marcaLimpa, modeloLimpo, placaLimpa, corLimpa, anoLimpo)
+                            .any { it.isBlank() } -> "Preencha todos os campos."
+                        placaLimpa.length != 7 -> "A placa deve ter 7 caracteres."
+                        anoLimpo.length != 4 || anoLimpo.toIntOrNull() == null ->
+                            "Informe um ano com quatro dígitos."
+                        anoLimpo.toInt() !in 1900..2100 -> "Informe um ano válido."
                         else -> ""
                     }
-
-                    if (erro.isEmpty()) {
-                        onSalvar(
-                            marcaLimpa,
-                            modeloLimpo,
-                            placaLimpa,
-                            corLimpa
-                        )
+                    if (erro.isBlank()) {
+                        onSalvar(marcaLimpa, modeloLimpo, placaLimpa, corLimpa, anoLimpo, principal)
                     }
                 }
             ) {
-                Text(
-                    if (salvando) "Salvando..." else "Salvar"
-                )
+                Text(if (salvando) "Salvando..." else "Salvar veículo")
             }
         },
         dismissButton = {
-            TextButton(
-                enabled = !salvando,
-                onClick = onDismiss
-            ) {
-                Text("Cancelar")
+            TextButton(enabled = !salvando, onClick = onDismiss) {
+                Text("Cancelar", color = PerfilSecondary)
             }
         }
     )
