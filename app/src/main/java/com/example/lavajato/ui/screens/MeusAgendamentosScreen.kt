@@ -1,33 +1,24 @@
+
 package com.example.lavajato.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -37,95 +28,202 @@ import com.example.lavajato.data.model.AppointmentRepository
 import com.example.lavajato.data.model.AppointmentStatus
 import com.example.lavajato.ui.components.BottomNavigationBar
 import com.example.lavajato.ui.components.BottomTab
-import com.example.lavajato.ui.theme.LightGray
-import com.example.lavajato.ui.theme.NavyDark
-import com.example.lavajato.ui.theme.TextGraySecondary
-import com.example.lavajato.ui.theme.White
-import com.example.lavajato.ui.theme.YellowAccent
 
-private enum class AgendamentosTab { PROXIMOS, HISTORICO }
+private val Navy = Color(0xFF061C36)
+private val Blue = Color(0xFF1677FF)
+private val Background = Color(0xFFF5F7FB)
+private val SecondaryText = Color(0xFF77869B)
+
+private enum class AgendamentosTab {
+    PROXIMOS,
+    CONCLUIDOS
+}
 
 @Composable
 fun MeusAgendamentosScreen(
     onVoltarClick: () -> Unit,
-    onInicioClick: () -> Unit
+    onInicioClick: () -> Unit,
+    onPerfilClick: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(AgendamentosTab.PROXIMOS) }
-    var selectedBottomTab by remember { mutableStateOf(BottomTab.AGENDAMENTOS) }
+    var selectedTab by remember {
+        mutableStateOf(AgendamentosTab.PROXIMOS)
+    }
 
-    val filteredList = AppointmentRepository.list.filter {
-        if (selectedTab == AgendamentosTab.PROXIMOS) {
-            it.status == AppointmentStatus.CONFIRMADO
-        } else {
-            it.status != AppointmentStatus.CONFIRMADO
+    var loadError by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(FirebaseAuth.getInstance().currentUser?.uid) {
+        AppointmentRepository.observe { loadError = it }
+        onDispose { AppointmentRepository.stopObserving() }
+    }
+
+    val filteredList = AppointmentRepository.list.filter { appointment ->
+        when (selectedTab) {
+            AgendamentosTab.PROXIMOS ->
+                appointment.status == AppointmentStatus.CONFIRMADO
+            AgendamentosTab.CONCLUIDOS ->
+                appointment.status != AppointmentStatus.CONFIRMADO
         }
     }
 
     Scaffold(
+        containerColor = Background,
         bottomBar = {
             BottomNavigationBar(
-                selected = selectedBottomTab,
+                selected = BottomTab.AGENDAMENTOS,
                 onSelect = { tab ->
-                    selectedBottomTab = tab
-                    if (tab == BottomTab.INICIO) onInicioClick()
+                    when (tab) {
+                        BottomTab.INICIO -> onInicioClick()
+                        BottomTab.AGENDAMENTOS -> Unit
+                        BottomTab.PERFIL -> onPerfilClick()
+                    }
                 }
             )
-        },
-        containerColor = LightGray
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .background(Navy)
+                    .padding(
+                        start = 22.dp,
+                        end = 22.dp,
+                        top = 24.dp,
+                        bottom = 28.dp
+                    )
             ) {
-                IconButton(onClick = onVoltarClick) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = NavyDark)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Blue, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(23.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Lava+",
+                        color = Color.White,
+                        fontSize = 23.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Text(
-                    text = "Meus Agendamentos",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NavyDark
+                    text = "Meus agendamentos",
+                    color = Color.White,
+                    fontSize = 25.sp,
+                    fontWeight = FontWeight.Bold
                 )
+
+                Spacer(modifier = Modifier.height(7.dp))
+
+                Text(
+                    text = "Acompanhe seus serviços e agendamentos.",
+                    color = Color(0xFFB6C7DB),
+                    fontSize = 13.sp
+                )
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Color(0xFF132F4F),
+                            RoundedCornerShape(14.dp)
+                        )
+                        .padding(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AgendamentoTabButton(
+                        text = "Próximos",
+                        selected = selectedTab == AgendamentosTab.PROXIMOS,
+                        onClick = {
+                            selectedTab = AgendamentosTab.PROXIMOS
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    AgendamentoTabButton(
+                        text = "Concluídos",
+                        selected = selectedTab == AgendamentosTab.CONCLUIDOS,
+                        onClick = {
+                            selectedTab = AgendamentosTab.CONCLUIDOS
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .background(White, RoundedCornerShape(12.dp))
-                    .padding(4.dp)
-            ) {
-                TabItem(
-                    text = "Próximos",
-                    selected = selectedTab == AgendamentosTab.PROXIMOS,
-                    onClick = { selectedTab = AgendamentosTab.PROXIMOS },
-                    modifier = Modifier.weight(1f)
-                )
-                TabItem(
-                    text = "Histórico",
-                    selected = selectedTab == AgendamentosTab.HISTORICO,
-                    onClick = { selectedTab = AgendamentosTab.HISTORICO },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            if (filteredList.isEmpty()) {
-                Box(
+            if (loadError != null) {
+                Text("Erro ao carregar agendamentos: ${loadError}", color = Color.Red, modifier = Modifier.padding(20.dp))
+            } else if (filteredList.isEmpty()) {
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(78.dp)
+                            .background(
+                                Color(0xFFE7F0FF),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            tint = Blue,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
                     Text(
-                        text = "Nenhum agendamento encontrado.",
-                        color = TextGraySecondary,
+                        text = if (
+                            selectedTab == AgendamentosTab.PROXIMOS
+                        ) {
+                            "Nenhum agendamento próximo"
+                        } else {
+                            "Nenhum agendamento concluído"
+                        },
+                        color = Navy,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (
+                            selectedTab == AgendamentosTab.PROXIMOS
+                        ) {
+                            "Seus próximos serviços aparecerão aqui."
+                        } else {
+                            "Seu histórico de serviços aparecerá aqui."
+                        },
+                        color = SecondaryText,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
@@ -133,14 +231,20 @@ fun MeusAgendamentosScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(
+                        horizontal = 20.dp,
+                        vertical = 22.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(filteredList) { appointment ->
-                        AppointmentCardCustom(
+                        AgendamentoCard(
                             appointment = appointment,
                             onStatusChange = { newStatus ->
-                                AppointmentRepository.updateStatus(appointment.id, newStatus)
+                                AppointmentRepository.updateStatus(
+                                    appointment.id,
+                                    newStatus
+                                )
                             }
                         )
                     }
@@ -151,59 +255,7 @@ fun MeusAgendamentosScreen(
 }
 
 @Composable
-private fun AppointmentCardCustom(
-    appointment: Appointment,
-    onStatusChange: (AppointmentStatus) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(White, RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = appointment.serviceName, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = NavyDark)
-            Box(
-                modifier = Modifier
-                    .background(
-                        if (appointment.status == AppointmentStatus.CONFIRMADO) YellowAccent else LightGray,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = appointment.status.label,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NavyDark
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(text = "${appointment.date} às ${appointment.time}", fontSize = 13.sp, color = TextGraySecondary)
-        Text(text = appointment.address, fontSize = 12.sp, color = TextGraySecondary)
-
-        if (appointment.status == AppointmentStatus.CONFIRMADO) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "[ Marcar como Finalizado ]",
-                    fontSize = 12.sp,
-                    color = NavyDark,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onStatusChange(AppointmentStatus.FINALIZADO) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TabItem(
+private fun AgendamentoTabButton(
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -211,16 +263,170 @@ private fun TabItem(
 ) {
     Box(
         modifier = modifier
+            .background(
+                if (selected) Color.White
+                else Color.Transparent,
+                RoundedCornerShape(10.dp)
+            )
             .clickable(onClick = onClick)
-            .background(if (selected) NavyDark else White, RoundedCornerShape(10.dp))
-            .padding(vertical = 10.dp),
+            .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (selected) White else TextGraySecondary,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) Navy
+            else Color(0xFFCFD9E7),
+            fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp
         )
     }
 }
+
+@Composable
+private fun AgendamentoCard(
+    appointment: Appointment,
+    onStatusChange: (AppointmentStatus) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Color.White,
+                RoundedCornerShape(18.dp)
+            )
+            .padding(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = appointment.serviceName,
+                color = Navy,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (
+                            appointment.status ==
+                            AppointmentStatus.CONFIRMADO
+                        ) {
+                            Color(0xFFE7F0FF)
+                        } else {
+                            Color(0xFFE5F7EC)
+                        },
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(
+                        horizontal = 10.dp,
+                        vertical = 6.dp
+                    )
+            ) {
+                Text(
+                    text = appointment.status.label,
+                    color = if (
+                        appointment.status ==
+                        AppointmentStatus.CONFIRMADO
+                    ) {
+                        Blue
+                    } else {
+                        Color(0xFF198754)
+                    },
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.CalendarMonth,
+                contentDescription = null,
+                tint = Blue,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(modifier = Modifier.width(9.dp))
+
+            Text(
+                text = appointment.date,
+                color = SecondaryText,
+                fontSize = 13.sp
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Icon(
+                imageVector = Icons.Default.Schedule,
+                contentDescription = null,
+                tint = Blue,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(modifier = Modifier.width(7.dp))
+
+            Text(
+                text = appointment.time,
+                color = SecondaryText,
+                fontSize = 13.sp
+            )
+        }
+
+        if (appointment.vehicleDescription.isNotBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text("Veículo: ${appointment.vehicleDescription} • ${appointment.vehiclePlate}", color = SecondaryText, fontSize = 13.sp)
+        }
+        Spacer(modifier = Modifier.height(13.dp))
+
+        Row(
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                tint = Blue,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(modifier = Modifier.width(9.dp))
+
+            Text(
+                text = appointment.address,
+                color = SecondaryText,
+                fontSize = 12.sp
+            )
+        }
+
+        if (appointment.status == AppointmentStatus.CONFIRMADO) {
+            Spacer(modifier = Modifier.height(18.dp))
+
+            HorizontalDivider(
+                color = Color(0xFFEDF0F5)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Cancelar agendamento",
+                color = Blue,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable {
+                    onStatusChange(AppointmentStatus.CANCELADO)
+                }
+            )
+        }
+    }
+}
+
