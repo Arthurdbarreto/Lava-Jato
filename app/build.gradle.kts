@@ -72,4 +72,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Testes unitários - Sprint 4
+    testImplementation("junit:junit:4.13.2")
 }

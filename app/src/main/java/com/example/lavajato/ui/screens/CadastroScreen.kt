@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.lavajato.CadastroValidator
 import com.example.lavajato.data.model.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -247,13 +248,13 @@ fun CadastroScreen(
                                 .matches() ->
                                 "Digite um e-mail válido."
 
-                            numerosTelefone.length !in 10..11 ->
+                            !CadastroValidator.telefoneValido(telefoneLimpo) ->
                                 "Informe um telefone válido com DDD."
 
-                            senha.length < 8 ->
+                            !CadastroValidator.senhaValida(senha) ->
                                 "A senha deve ter pelo menos 8 caracteres."
 
-                            senha != confirmarSenha ->
+                            !CadastroValidator.senhasCoincidem(senha, confirmarSenha) ->
                                 "As senhas não coincidem."
 
                             !aceitouTermos ->
