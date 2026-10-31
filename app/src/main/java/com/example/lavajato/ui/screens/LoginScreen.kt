@@ -1,170 +1,471 @@
+
 package com.example.lavajato.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.lavajato.data.model.UserRepository
-import com.example.lavajato.ui.components.AppButton
-import com.example.lavajato.ui.components.AppOutlinedButton
-import com.example.lavajato.ui.components.AppTextField
-import com.example.lavajato.ui.components.Logo
-import com.example.lavajato.ui.theme.NavyDark
-import com.example.lavajato.ui.theme.NavyDarker
-import com.example.lavajato.ui.theme.YellowAccent
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.firestore.FirebaseFirestore
+
+private val LoginNavy = Color(0xFF061C36)
+private val LoginBlue = Color(0xFF1677FF)
+private val LoginSecondary = Color(0xFF77869B)
+private val LoginBorder = Color(0xFFDCE5F1)
 
 @Composable
 fun LoginScreen(
     onEntrarClick: () -> Unit,
     onCadastreSeClick: () -> Unit
 ) {
-    // Carrega a sugestão do último e-mail cadastrado/usado
-    var emailOrPhone by remember { mutableStateOf(UserRepository.lastSavedEmail) }
-    var password by remember { mutableStateOf("") }
+    var email by remember {
+        mutableStateOf(UserRepository.lastSavedEmail)
+    }
+    var senha by remember { mutableStateOf("") }
+    var mensagemErro by remember { mutableStateOf("") }
+    var mensagemSucesso by remember { mutableStateOf("") }
+    var carregando by remember { mutableStateOf(false) }
+    var recuperandoSenha by remember { mutableStateOf(false) }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(NavyDarker, NavyDark, NavyDarker)
-                )
-            )
+            .background(Color.White)
+            .verticalScroll(rememberScrollState())
     ) {
-        Column(
+        // Cabeçalho azul-marinho
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .fillMaxWidth()
+                .height(275.dp)
+                .background(LoginNavy)
         ) {
-            Spacer(modifier = Modifier.height(90.dp))
+            Box(
+                modifier = Modifier
+                    .size(210.dp)
+                    .offset(x = 240.dp, y = (-75).dp)
+                    .background(
+                        Color(0xFF0B3267),
+                        CircleShape
+                    )
+            )
 
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 38.dp)
             ) {
-                Logo(tint = Color.White, iconSize = 64.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(LoginBlue, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "Lava+",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Seu carro, do seu jeito.",
+                    color = Color(0xFFD0DCEB),
+                    fontSize = 13.sp
+                )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Icon(
+                imageVector = Icons.Default.DirectionsCar,
+                contentDescription = null,
+                tint = Color(0xFF45617D),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 34.dp, bottom = 35.dp)
+                    .size(75.dp)
+            )
+        }
 
-            AppTextField(
-                value = emailOrPhone,
-                onValueChange = { emailOrPhone = it },
-                placeholder = "E-mail ou telefone",
-                leadingIcon = Icons.Default.Email,
-                keyboardType = KeyboardType.Email,
-                fieldBackground = Color.White.copy(alpha = 0.06f),
-                borderColor = Color.White.copy(alpha = 0.25f),
-                textColor = Color.White
+        // Formulário branco sobre o cabeçalho
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = (-20).dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 25.dp,
+                        topEnd = 25.dp
+                    )
+                )
+                .background(Color.White)
+                .padding(
+                    start = 26.dp,
+                    end = 26.dp,
+                    top = 28.dp,
+                    bottom = 28.dp
+                )
+        ) {
+            Text(
+                text = "BEM-VINDO DE VOLTA",
+                color = LoginBlue,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            AppTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = "Senha",
-                leadingIcon = Icons.Default.Lock,
-                isPassword = true,
-                fieldBackground = Color.White.copy(alpha = 0.06f),
-                borderColor = Color.White.copy(alpha = 0.25f),
-                textColor = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            AppButton(
-                text = "Entrar",
-                onClick = {
-                    if (emailOrPhone.isNotBlank()) {
-                        UserRepository.lastSavedEmail = emailOrPhone
-                    }
-                    onEntrarClick()
-                }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Esqueceu sua senha?",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
+                text = "Entre na sua conta",
+                color = LoginNavy,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(5.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
-                Text(
-                    text = "OU",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+            Text(
+                text = "Cuidar do seu carro ficou mais simples.",
+                color = LoginSecondary,
+                fontSize = 13.sp
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            Text(
+                text = "E-mail",
+                color = LoginNavy,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = {
+                    email = it
+                    mensagemErro = ""
+                    mensagemSucesso = ""
+                },
+                placeholder = {
+                    Text(
+                        text = "seuemail@exemplo.com",
+                        color = Color(0xFF98ABC4),
+                        fontSize = 13.sp
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = LoginBlue,
+                    unfocusedBorderColor = LoginBorder,
+                    focusedContainerColor = Color(0xFFFAFBFD),
+                    unfocusedContainerColor = Color(0xFFFAFBFD)
                 )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Text(
+                text = "Senha",
+                color = LoginNavy,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = senha,
+                onValueChange = {
+                    senha = it
+                    mensagemErro = ""
+                },
+                placeholder = {
+                    Text(
+                        text = "Sua senha",
+                        color = Color(0xFF98ABC4),
+                        fontSize = 13.sp
+                    )
+                },
+                singleLine = true,
+                visualTransformation =
+                    PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = LoginBlue,
+                    unfocusedBorderColor = LoginBorder,
+                    focusedContainerColor = Color(0xFFFAFBFD),
+                    unfocusedContainerColor = Color(0xFFFAFBFD)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = if (recuperandoSenha) {
+                    "Enviando..."
+                } else {
+                    "Esqueci minha senha"
+                },
+                color = LoginBlue,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable(
+                        enabled = !recuperandoSenha && !carregando
+                    ) {
+                        val emailRecuperacao = email.trim()
+
+                        if (emailRecuperacao.isBlank()) {
+                            mensagemErro =
+                                "Informe seu e-mail para recuperar a senha."
+                        } else {
+                            recuperandoSenha = true
+                            mensagemErro = ""
+                            mensagemSucesso = ""
+
+                            FirebaseAuth.getInstance()
+                                .sendPasswordResetEmail(emailRecuperacao)
+                                .addOnCompleteListener { task ->
+                                    recuperandoSenha = false
+
+                                    if (task.isSuccessful) {
+                                        mensagemSucesso =
+                                            "Se o e-mail estiver cadastrado, verifique sua caixa de entrada."
+                                    } else {
+                                        mensagemErro =
+                                            "Não foi possível enviar o e-mail. Verifique o endereço informado."
+                                    }
+                                }
+                        }
+                    }
+            )
+
+            if (mensagemErro.isNotBlank()) {
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = mensagemErro,
+                    color = Color(0xFFD63C45),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            if (mensagemSucesso.isNotBlank()) {
+                Spacer(modifier = Modifier.height(14.dp))
 
-            AppOutlinedButton(
-                text = "Entrar com Google",
-                onClick = { /* Login social */ },
-                borderColor = Color.White.copy(alpha = 0.4f),
-                contentColor = Color.White
-            )
+                Text(
+                    text = mensagemSucesso,
+                    color = Color(0xFF198754),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(25.dp))
+
+            Button(
+                onClick = {
+                    if (!carregando) {
+                        val emailLogin = email.trim()
+
+                        when {
+                            emailLogin.isBlank() ||
+                                    senha.isBlank() -> {
+                                mensagemErro =
+                                    "Preencha o e-mail e a senha."
+                            }
+
+                            else -> {
+                                carregando = true
+                                mensagemErro = ""
+                                mensagemSucesso = ""
+
+                                FirebaseAuth.getInstance()
+                                    .signInWithEmailAndPassword(
+                                        emailLogin,
+                                        senha
+                                    )
+                                    .addOnCompleteListener { task ->
+                                        if (task.isSuccessful) {
+                                            val usuario =
+                                                FirebaseAuth.getInstance()
+                                                    .currentUser
+
+                                            if (usuario == null) {
+                                                carregando = false
+                                                mensagemErro =
+                                                    "Não foi possível identificar o usuário."
+                                            } else {
+                                                FirebaseFirestore
+                                                    .getInstance()
+                                                    .collection("usuarios")
+                                                    .document(usuario.uid)
+                                                    .get()
+                                                    .addOnSuccessListener {
+                                                            documento ->
+
+                                                        if (documento.exists()) {
+                                                            val nome =
+                                                                documento.getString(
+                                                                    "nome"
+                                                                ).orEmpty()
+
+                                                            val emailSalvo =
+                                                                documento.getString(
+                                                                    "email"
+                                                                ) ?: usuario.email.orEmpty()
+
+                                                            // Compatibilidade com
+                                                            // contas antigas.
+                                                            val modeloCarro =
+                                                                documento.getString(
+                                                                    "modeloCarro"
+                                                                ).orEmpty()
+
+                                                            UserRepository
+                                                                .registerUser(
+                                                                    name = nome,
+                                                                    email = emailSalvo,
+                                                                    carModel = modeloCarro
+                                                                )
+
+                                                            carregando = false
+                                                            onEntrarClick()
+                                                        } else {
+                                                            carregando = false
+                                                            UserRepository.clearUser()
+                                                            mensagemErro =
+                                                                "Sua conta existe, mas o perfil ainda não foi cadastrado."
+                                                        }
+                                                    }
+                                                    .addOnFailureListener {
+                                                        carregando = false
+                                                        mensagemErro =
+                                                            "Não foi possível carregar seu perfil. Tente novamente."
+                                                    }
+                                            }
+                                        } else {
+                                            carregando = false
+
+                                            mensagemErro =
+                                                when (task.exception) {
+                                                    is FirebaseAuthInvalidUserException,
+                                                    is FirebaseAuthInvalidCredentialsException ->
+                                                        "E-mail ou senha inválidos."
+
+                                                    else ->
+                                                        "Não foi possível entrar. Verifique sua conexão e tente novamente."
+                                                }
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                },
+                enabled = !carregando && !recuperandoSenha,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = LoginBlue
+                )
+            ) {
+                if (carregando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Entrar",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(25.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Não tem uma conta? ",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 13.sp
+                    text = "Ainda não tem uma conta? ",
+                    color = LoginSecondary,
+                    fontSize = 12.sp
                 )
+
                 Text(
                     text = "Cadastre-se",
-                    color = YellowAccent,
+                    color = LoginBlue,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable(onClick = onCadastreSeClick)
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable {
+                        onCadastreSeClick()
+                    }
                 )
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

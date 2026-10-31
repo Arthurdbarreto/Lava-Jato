@@ -1,3 +1,4 @@
+
 package com.example.lavajato.navigation
 
 import androidx.compose.runtime.Composable
@@ -26,6 +27,17 @@ object AppRoutes {
 fun AppNavigation() {
     val navController = rememberNavController()
 
+    fun navegarPelaBarra(rota: String) {
+        navController.navigate(rota) {
+            popUpTo(AppRoutes.HOME) {
+                inclusive = false
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = AppRoutes.LOGIN
@@ -34,7 +46,9 @@ fun AppNavigation() {
             LoginScreen(
                 onEntrarClick = {
                     navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
+                        popUpTo(AppRoutes.LOGIN) {
+                            inclusive = true
+                        }
                     }
                 },
                 onCadastreSeClick = {
@@ -47,7 +61,9 @@ fun AppNavigation() {
             CadastroScreen(
                 onCadastrarClick = {
                     navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
+                        popUpTo(AppRoutes.LOGIN) {
+                            inclusive = true
+                        }
                     }
                 },
                 onJaTenhoContaClick = {
@@ -62,23 +78,28 @@ fun AppNavigation() {
                     navController.navigate(AppRoutes.AGENDAMENTO)
                 },
                 onMeusAgendamentosClick = {
-                    navController.navigate(AppRoutes.MEUS_AGENDAMENTOS)
+                    navegarPelaBarra(AppRoutes.MEUS_AGENDAMENTOS)
                 },
                 onAvaliacoesClick = {
                     navController.navigate(AppRoutes.AVALIACOES)
                 },
                 onPerfilClick = {
-                    navController.navigate(AppRoutes.PERFIL)
+                    navegarPelaBarra(AppRoutes.PERFIL)
                 }
             )
         }
 
         composable(AppRoutes.AGENDAMENTO) {
             AgendamentoScreen(
-                onVoltarClick = { navController.popBackStack() },
+                onVoltarClick = {
+                    navController.popBackStack()
+                },
                 onConcluidoClick = {
                     navController.navigate(AppRoutes.MEUS_AGENDAMENTOS) {
-                        popUpTo(AppRoutes.HOME)
+                        popUpTo(AppRoutes.HOME) {
+                            inclusive = false
+                        }
+                        launchSingleTop = true
                     }
                 }
             )
@@ -86,32 +107,40 @@ fun AppNavigation() {
 
         composable(AppRoutes.MEUS_AGENDAMENTOS) {
             MeusAgendamentosScreen(
-                onVoltarClick = { navController.popBackStack() },
+                onVoltarClick = {
+                    navController.popBackStack()
+                },
                 onInicioClick = {
-                    navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.HOME) { inclusive = true }
-                    }
+                    navegarPelaBarra(AppRoutes.HOME)
+                },
+                onPerfilClick = {
+                    navegarPelaBarra(AppRoutes.PERFIL)
                 }
             )
         }
 
         composable(AppRoutes.AVALIACOES) {
-            AvaliacoesScreen(onVoltarClick = { navController.popBackStack() })
+            AvaliacoesScreen(
+                onVoltarClick = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(AppRoutes.PERFIL) {
             PerfilScreen(
                 onInicioClick = {
-                    navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.HOME) { inclusive = true }
-                    }
+                    navegarPelaBarra(AppRoutes.HOME)
                 },
                 onAgendamentosClick = {
-                    navController.navigate(AppRoutes.MEUS_AGENDAMENTOS)
+                    navegarPelaBarra(AppRoutes.MEUS_AGENDAMENTOS)
                 },
                 onSairClick = {
                     navController.navigate(AppRoutes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                        launchSingleTop = true
                     }
                 }
             )
