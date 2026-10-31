@@ -50,6 +50,7 @@ fun MeusAgendamentosScreen(
     }
 
     var loadError by remember { mutableStateOf<String?>(null) }
+    var cancellationError by remember { mutableStateOf<String?>(null) }
     DisposableEffect(FirebaseAuth.getInstance().currentUser?.uid) {
         AppointmentRepository.observe { loadError = it }
         onDispose { AppointmentRepository.stopObserving() }
@@ -170,6 +171,9 @@ fun MeusAgendamentosScreen(
                 }
             }
 
+            if (cancellationError != null) {
+                Text(cancellationError.orEmpty(), color = Color.Red, modifier = Modifier.padding(20.dp))
+            }
             if (loadError != null) {
                 Text("Erro ao carregar agendamentos: ${loadError}", color = Color.Red, modifier = Modifier.padding(20.dp))
             } else if (filteredList.isEmpty()) {
@@ -241,10 +245,11 @@ fun MeusAgendamentosScreen(
                         AgendamentoCard(
                             appointment = appointment,
                             onStatusChange = { newStatus ->
+                                cancellationError = null
                                 AppointmentRepository.updateStatus(
                                     appointment.id,
                                     newStatus
-                                )
+                                ) { cancellationError = it }
                             }
                         )
                     }

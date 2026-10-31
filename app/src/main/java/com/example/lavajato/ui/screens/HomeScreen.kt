@@ -1,4 +1,3 @@
-
 package com.example.lavajato.ui.screens
 
 import androidx.compose.foundation.background
@@ -70,6 +69,7 @@ fun HomeScreen(
     onPerfilClick: () -> Unit
 ) {
     var busca by remember { mutableStateOf("") }
+    var mostrarAvisoAutoClean by remember { mutableStateOf(false) }
 
     val primeiroNome = UserRepository.registeredName
         .trim()
@@ -281,7 +281,13 @@ fun HomeScreen(
                             estabelecimentos.forEach { lavaJato ->
                                 LavaJatoCard(
                                     lavaJato = lavaJato,
-                                    onClick = onAgendarServicoClick
+                                    onClick = {
+                                        if (lavaJato.nome == "Lava Jato Prime") {
+                                            onAgendarServicoClick()
+                                        } else {
+                                            mostrarAvisoAutoClean = true
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -376,6 +382,24 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (mostrarAvisoAutoClean) {
+        AlertDialog(
+            onDismissRequest = { mostrarAvisoAutoClean = false },
+            title = { Text("Auto Clean") },
+            text = {
+                Text(
+                    "Os agendamentos do Auto Clean ainda não estão disponíveis. " +
+                            "Por enquanto, você pode realizar agendamentos no Lava Jato Prime."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarAvisoAutoClean = false }) {
+                    Text("Entendi")
+                }
+            }
+        )
     }
 }
 

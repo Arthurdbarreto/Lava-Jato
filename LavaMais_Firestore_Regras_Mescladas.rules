@@ -1,0 +1,507 @@
+// LAVA+ — REGRAS CONSOLIDADAS DO CLOUD FIRESTORE
+// Sprint 4 — Controle de horários
+//
+// IMPORTANTE:
+// Testar no emulador antes de publicar.
+// Não ativar reconciliado: true antes de confirmar
+// que não existem agendamentos ou reservas antigas pendentes.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 1. FUNÇÕES GERAIS
+    // ==========================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function ready() {
+      return exists(
+        /databases/$(database)/documents/controle_horarios/lava_jato_prime
+      )
+      && get(
+        /databases/$(database)/documents/controle_horarios/lava_jato_prime
+      ).data.get('reconciliado', false) == true;
+    }
+
+    function pad(n) {
+      return n < 10 ? '0' + string(n) : string(n);
+    }
+
+    function validStart(d) {
+      let local = timestamp.value(
+        d.inicio.toMillis() - 10800000
+      );
+
+      return d.inicio > request.time
+      && d.inicio.toMillis() % 60000 == 0
+      && d.inicio.nanos() == 0
+
+      && d.date ==
+      string(local.year()) + '-'
+      + pad(local.month()) + '-'
+      + pad(local.day())
+
+      && d.time ==
+      pad(local.hours()) + ':'
+      + pad(local.minutes())
+
+      && d.time in [
+        '08:00',
+        '09:00',
+        '10:00',
+        '11:00',
+        '13:00',
+        '14:00',
+        '14:30',
+        '15:00',
+        '16:00',
+        '17:00'
+      ];
+    }
+
+    function slotId(d) {
+      return d.estabelecimentoId
+      + '_'
+      + d.date
+      + '_'
+      + d.time.replace(':', '-');
+    }
+
+    function matchesSlot(s, a, id) {
+      return s.agendamentoId == id
+      && s.estabelecimentoId == a.estabelecimentoId
+      && s.date == a.date
+      && s.time == a.time
+      && a.horarioId == slotId(a);
+    }
+
+    // ==========================================
+    // 2. PERFIL DO USUÁRIO
+    // ==========================================
+
+    match /usuarios/{uid} {
+
+      function perfilValido() {
+        return request.resource.data.keys().hasOnly([
+          'nome',
+          'email',
+          'telefone',
+          'modeloCarro'
+        ])
+
+        && request.resource.data.keys().hasAll([
+          'nome',
+          'email'
+        ])
+
+        && request.resource.data.nome is string
+        && request.resource.data.email is string
+
+        && request.resource.data.email ==
+        request.auth.token.email
+
+        && (
+          !('telefone' in request.resource.data)
+          || request.resource.data.telefone is string
+        )
+
+        && (
+          !('modeloCarro' in request.resource.data)
+          || request.resource.data.modeloCarro is string
+        );
+      }
+
+      allow read: if owner(uid);
+
+      allow create: if owner(uid)
+      && perfilValido();
+
+      allow update: if owner(uid)
+      && perfilValido()
+      && request.resource.data.email == resource.data.email;
+
+      allow delete: if owner(uid);
+
+
+      // ========================================
+      // 3. VEÍCULOS DO USUÁRIO
+      // ========================================
+
+      match /veiculos/{id} {
+
+        function veiculoValido() {
+          return request.resource.data.keys().hasOnly([
+            'marca',
+            'modelo',
+            'placa',
+            'cor',
+            'ano',
+            'principal'
+          ])
+
+          && request.resource.data.keys().hasAll([
+            'marca',
+            'modelo',
+            'placa',
+            'cor'
+          ])
+
+          && request.resource.data.marca is string
+          && request.resource.data.modelo is string
+          && request.resource.data.placa is string
+          && request.resource.data.cor is string
+
+          && request.resource.data.marca.size() > 0
+          && request.resource.data.modelo.size() > 0
+          && request.resource.data.placa.size() == 7
+          && request.resource.data.cor.size() > 0
+
+          && (
+            !('ano' in request.resource.data)
+            || (
+              request.resource.data.ano is string
+              && request.resource.data.ano.matches('^[0-9]{4}$')
+            )
+          )
+
+          && (
+            !('principal' in request.resource.data)
+            || request.resource.data.principal is bool
+          );
+        }
+
+        allow read: if owner(uid);
+
+        allow create, update: if owner(uid)
+        && veiculoValido();
+
+        allow delete: if owner(uid);
+      }
+    }
+
+
+    // ==========================================
+    // 4. CONTROLE DE HORÁRIOS
+    // ==========================================
+
+    match /controle_horarios/{id} {
+
+      allow read: if signedIn()
+      && id == 'lava_jato_prime';
+
+      // Apenas administração confiável pode alterar.
+      allow write: if false;
+    }
+
+
+    // ==========================================
+    // 5. AGENDAMENTOS
+    // ==========================================
+
+    match /agendamentos/{id} {
+
+      function dadosAgendamentoValidos() {
+        return request.resource.data.keys().hasAll([
+          'usuarioId',
+          'estabelecimentoId',
+          'horarioId',
+          'controleVersao',
+          'inicio',
+          'veiculoId',
+          'serviceName',
+          'date',
+          'time',
+          'vehicleDescription',
+          'vehiclePlate',
+          'address',
+          'status'
+        ])
+
+        && request.resource.data.usuarioId is string
+        && request.resource.data.horarioId is string
+        && request.resource.data.serviceName is string
+        && request.resource.data.serviceName.size() > 0
+
+        && request.resource.data.date is string
+        && request.resource.data.time is string
+
+        && request.resource.data.veiculoId is string
+        && request.resource.data.veiculoId.size() > 0
+
+        && request.resource.data.vehicleDescription is string
+        && request.resource.data.vehiclePlate is string
+        && request.resource.data.address is string;
+      }
+
+      // ========================================
+      // CONSULTAR AGENDAMENTOS
+      // ========================================
+
+      allow read: if owner(resource.data.usuarioId);
+
+
+      // ========================================
+      // CRIAR AGENDAMENTO
+      // ========================================
+
+      allow create: if signedIn()
+
+      && dadosAgendamentoValidos()
+
+      && owner(request.resource.data.usuarioId)
+
+      && ready()
+
+      && request.resource.data.keys().hasOnly([
+        'usuarioId',
+        'estabelecimentoId',
+        'horarioId',
+        'controleVersao',
+        'inicio',
+        'veiculoId',
+        'serviceName',
+        'date',
+        'time',
+        'vehicleDescription',
+        'vehiclePlate',
+        'address',
+        'status'
+      ])
+
+      && request.resource.data.estabelecimentoId ==
+      'lava_jato_prime'
+
+      && request.resource.data.controleVersao == 2
+
+      && request.resource.data.status == 'CONFIRMADO'
+
+      && request.resource.data.inicio is timestamp
+
+      && validStart(request.resource.data)
+
+      && exists(
+        /databases/$(database)/documents/usuarios/$(request.auth.uid)/veiculos/$(request.resource.data.veiculoId)
+      )
+
+      && request.resource.data.horarioId ==
+      slotId(request.resource.data)
+
+      // Impede reservar horário já ocupado.
+      && !exists(
+        /databases/$(database)/documents/horarios_reservados/$(request.resource.data.horarioId)
+      )
+
+      // A reserva deve ser criada na mesma transação.
+      && matchesSlot(
+        getAfter(
+          /databases/$(database)/documents/horarios_reservados/$(request.resource.data.horarioId)
+        ).data,
+        request.resource.data,
+        id
+      )
+
+      && getAfter(
+        /databases/$(database)/documents/horarios_reservados/$(request.resource.data.horarioId)
+      ).data.bloqueioLegado == false;
+
+
+      // ========================================
+      // CANCELAR AGENDAMENTO
+      // ========================================
+
+      // Agendamentos antigos podem ser cancelados
+      // sem liberar bloqueios legados.
+      //
+      // Agendamentos versão 2 exigem exclusão
+      // atômica da reserva correspondente.
+
+      allow update: if owner(resource.data.usuarioId)
+
+      && resource.data.status == 'CONFIRMADO'
+
+      && request.resource.data.status == 'CANCELADO'
+
+      && request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly(['status'])
+
+      && (
+        // Registros anteriores ao controle versão 2.
+        (
+          resource.data.get('controleVersao', 0) != 2
+        )
+
+        ||
+
+        // Registros novos: só cancelar se a reserva
+        // correspondente existir e for removida.
+        (
+          resource.data.get('controleVersao', 0) == 2
+
+          && ready()
+
+          && resource.data.get('estabelecimentoId', '') ==
+          'lava_jato_prime'
+
+          && resource.data.get('horarioId', '') ==
+          slotId(resource.data)
+
+          && exists(
+            /databases/$(database)/documents/horarios_reservados/$(resource.data.horarioId)
+          )
+
+          && get(
+            /databases/$(database)/documents/horarios_reservados/$(resource.data.horarioId)
+          ).data.bloqueioLegado == false
+
+          && matchesSlot(
+            get(
+              /databases/$(database)/documents/horarios_reservados/$(resource.data.horarioId)
+            ).data,
+            resource.data,
+            id
+          )
+
+          && !existsAfter(
+            /databases/$(database)/documents/horarios_reservados/$(resource.data.horarioId)
+          )
+        )
+      );
+
+      // Não permitir exclusão direta.
+      allow delete: if false;
+    }
+
+
+    // ==========================================
+    // 6. HORÁRIOS RESERVADOS
+    // ==========================================
+
+    match /horarios_reservados/{id} {
+
+      // Os documentos desta coleção não devem
+      // conter dados pessoais dos clientes.
+      allow read: if signedIn();
+
+
+      // ========================================
+      // CRIAR RESERVA
+      // ========================================
+
+      allow create: if signedIn()
+
+      && ready()
+
+      && request.resource.data.keys().hasOnly([
+        'estabelecimentoId',
+        'date',
+        'time',
+        'agendamentoId',
+        'bloqueioLegado'
+      ])
+
+      && request.resource.data.keys().hasAll([
+        'estabelecimentoId',
+        'date',
+        'time',
+        'agendamentoId',
+        'bloqueioLegado'
+      ])
+
+      && request.resource.data.estabelecimentoId ==
+      'lava_jato_prime'
+
+      && request.resource.data.bloqueioLegado == false
+
+      && id == slotId(request.resource.data)
+
+      && !exists(
+        /databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)
+      )
+
+      // Exige criação conjunta do agendamento.
+      && getAfter(
+        /databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)
+      ).data.usuarioId == request.auth.uid
+
+      && getAfter(
+        /databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)
+      ).data.status == 'CONFIRMADO'
+
+      && getAfter(
+        /databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)
+      ).data.controleVersao == 2
+
+      && matchesSlot(
+        request.resource.data,
+        getAfter(
+          /databases/$(database)/documents/agendamentos/$(request.resource.data.agendamentoId)
+        ).data,
+        request.resource.data.agendamentoId
+      );
+
+
+      // Não permitir alterar reservas existentes.
+      allow update: if false;
+
+
+      // ========================================
+      // LIBERAR HORÁRIO
+      // ========================================
+
+      allow delete: if signedIn()
+
+      && ready()
+
+      // Bloqueios legados nunca são liberados
+      // diretamente pelo aplicativo.
+      && resource.data.bloqueioLegado == false
+
+      && get(
+        /databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)
+      ).data.usuarioId == request.auth.uid
+
+      && get(
+        /databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)
+      ).data.controleVersao == 2
+
+      && get(
+        /databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)
+      ).data.status == 'CONFIRMADO'
+
+      && matchesSlot(
+        resource.data,
+        get(
+          /databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)
+        ).data,
+        resource.data.agendamentoId
+      )
+
+      && id == slotId(resource.data)
+
+      // Exige cancelamento do agendamento
+      // na mesma transação.
+      && getAfter(
+        /databases/$(database)/documents/agendamentos/$(resource.data.agendamentoId)
+      ).data.status == 'CANCELADO';
+    }
+
+
+    // ==========================================
+    // 7. BLOQUEIO PADRÃO
+    // ==========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

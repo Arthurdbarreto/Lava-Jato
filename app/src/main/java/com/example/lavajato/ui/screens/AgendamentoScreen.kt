@@ -34,6 +34,7 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private val Blue = Color(0xFF1976FF)
 private val Dark = Color(0xFF091C35)
@@ -50,11 +51,7 @@ private val MonthLabel = DateTimeFormatter.ofPattern(
 )
 private val HourFormat = DateTimeFormatter.ofPattern("HH:mm")
 
-private val BookingHours = listOf(
-    "08:00", "09:00", "10:00",
-    "11:00", "13:00", "14:00",
-    "14:30", "15:00", "16:00", "17:00"
-)
+private val BookingHours = AppointmentRepository.bookingHours
 
 private data class BookingVehicle(
     val id: String,
@@ -83,11 +80,41 @@ fun AgendamentoScreen(
     var vehicleError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    var now by remember { mutableStateOf(LocalDateTime.now(AppointmentRepository.zone)) }
+    var occupied by remember(date, FirebaseAuth.getInstance().currentUser?.uid) { mutableStateOf<Set<String>?>(null) }
+    var availabilityError by remember(date) { mutableStateOf<String?>(null) }
 
     val uid = FirebaseAuth.getInstance().currentUser?.uid
     val firestore = remember { FirebaseFirestore.getInstance() }
     val selectedVehicle = vehicles.firstOrNull { it.id == vehicleId }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalDateTime.now(AppointmentRepository.zone)
+            delay(1000)
+        }
+    }
+    DisposableEffect(date, uid) {
+        occupied = null
+        availabilityError = null
+        var active = true
+        val remove = if (date != null && uid != null) {
+            AppointmentRepository.observeAvailability(date!!.toString()) { slots, error ->
+                if (active) {
+                    occupied = slots
+                    availabilityError = error
+                    if (slots == null || hour in slots) hour = null
+                }
+            }
+        } else null
+        onDispose { active = false; remove?.invoke() }
+    }
+    LaunchedEffect(now, date) {
+        val selectedHour = hour
+        val selectedDate = date
+        if (selectedDate != null && selectedHour != null &&
+            !LocalDateTime.of(selectedDate, LocalTime.parse(selectedHour)).isAfter(now)) hour = null
+    }
 
     // Seleciona o veículo principal ao entrar na etapa 2.
     // Não substitui uma escolha manual já realizada.
@@ -207,6 +234,8 @@ fun AgendamentoScreen(
                     date = date,
                     selected = hour,
                     now = now,
+                    occupied = occupied,
+                    availabilityError = availabilityError,
                     onSelect = { hour = it }
                 )
             }
@@ -249,7 +278,7 @@ fun AgendamentoScreen(
                 onClick = {
                     if (saving) return@Button
 
-                    now = LocalDateTime.now()
+                    now = LocalDateTime.now(AppointmentRepository.zone)
                     message = null
 
                     when (step) {
@@ -294,7 +323,9 @@ fun AgendamentoScreen(
                                             LocalTime.parse(chosenHour, HourFormat)
                                         ).isAfter(now)
 
-                            if (!validDateTime) {
+                            if (occupied == null || chosenHour in occupied.orEmpty()) {
+                                message = "Consulte a disponibilidade e escolha um horário livre."
+                            } else if (!validDateTime) {
                                 message = "Escolha um horário futuro."
                             } else if (
                                 chosenVehicle == null ||
@@ -325,7 +356,7 @@ fun AgendamentoScreen(
                         }
                     }
                 },
-                enabled = !saving,
+                enabled = !saving && (step != 4 || (occupied != null && hour != null && hour !in occupied.orEmpty())),
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp),
@@ -969,6 +1000,8 @@ private fun TimeStep(
     date: LocalDate?,
     selected: String?,
     now: LocalDateTime,
+    occupied: Set<String>?,
+    availabilityError: String?,
     onSelect: (String) -> Unit
 ) {
     Column(
@@ -1077,18 +1110,19 @@ private fun TimeStep(
                                     LocalTime.parse(time, HourFormat)
                                 ).isAfter(now)
 
-                    val active = time == selected
+                    val available = future && occupied != null && time !in occupied
+                    val active = available && time == selected
 
                     Surface(
                         onClick = { onSelect(time) },
-                        enabled = future,
+                        enabled = available,
                         modifier = Modifier
                             .weight(1f)
                             .height(52.dp),
                         shape = RoundedCornerShape(11.dp),
                         color = when {
                             active -> Blue
-                            !future -> Color(0xFFF1F3F6)
+                            !available -> Color(0xFFF1F3F6)
                             else -> Color.White
                         },
                         border = BorderStroke(
@@ -1105,7 +1139,7 @@ private fun TimeStep(
                                 fontSize = 12.sp,
                                 color = when {
                                     active -> Color.White
-                                    !future -> Color.LightGray
+                                    !available -> Color.LightGray
                                     else -> Dark
                                 }
                             )
@@ -1124,7 +1158,7 @@ private fun TimeStep(
         Spacer(Modifier.height(10.dp))
 
         Text(
-            text = "Horários desabilitados já passaram. A disponibilidade real do estabelecimento será integrada futuramente.",
+            text = availabilityError ?: if (occupied == null) "Consultando disponibilidade..." else "Horários reservados ou passados estão indisponíveis.",
             color = Muted,
             fontSize = 11.sp
         )
